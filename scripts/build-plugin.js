@@ -27,6 +27,9 @@ write('.claude-plugin/plugin.json', JSON.stringify({
   author: { name: 'Jemerson Barros', email: 'jemersonbarros@gmail.com' },
   license: 'MIT',
   homepage: 'https://github.com/AkiraZ1/figma-mcp-lite',
+  documentationUrl: 'https://github.com/AkiraZ1/figma-mcp-lite#readme',
+  termsOfServiceUrl: 'https://github.com/AkiraZ1/figma-mcp-lite/blob/main/TERMS.md',
+  privacyPolicyUrl: 'https://github.com/AkiraZ1/figma-mcp-lite/blob/main/PRIVACY.md',
   repository: 'https://github.com/AkiraZ1/figma-mcp-lite',
   keywords: ['figma', 'design-system', 'variables', 'mcp', 'subagent'],
 }, null, 2) + '\n');

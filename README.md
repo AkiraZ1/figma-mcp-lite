@@ -52,6 +52,10 @@ O agente prioriza o que está no arquivo. Se faltar algo, ou se tu pedir uma bib
 
 Dúvidas, bugs e sugestões: jemersonbarros@gmail.com ou issues em https://github.com/AkiraZ1/figma-mcp-lite/issues
 
+## Termos
+
+Veja os [termos de uso](https://github.com/AkiraZ1/figma-mcp-lite/blob/main/TERMS.md) (licença MIT) e a [política de privacidade](https://github.com/AkiraZ1/figma-mcp-lite/blob/main/PRIVACY.md) (sem coleta de dados).
+
 ## Privacidade
 
 O plugin do Figma só conversa com o servidor local (`localhost:3055`). O servidor só escuta na própria máquina e recusa conexões vindas de sites. Nada sai pra internet.

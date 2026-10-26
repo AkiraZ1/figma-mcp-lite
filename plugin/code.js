@@ -70,7 +70,7 @@ const LITE = (function (figma) {
 // setPluginData, loadAllPagesAsync nem fetch; sem crase nem "${" no fonte
 // (a instalação embrulha o código minificado em String.raw).
 
-var V = '0.4.2';
+var V = '0.4.3';
 var NS = 'lite';
 var ALIGN = { start: 'MIN', center: 'CENTER', end: 'MAX', between: 'SPACE_BETWEEN', baseline: 'BASELINE' };
 var WEIGHT = { 100: 'Thin', 200: 'Extra Light', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semi Bold', 700: 'Bold', 800: 'Extra Bold', 900: 'Black' };
