@@ -24,12 +24,12 @@ fs.rmSync(OUT, { recursive: true, force: true });
 write('.claude-plugin/plugin.json', JSON.stringify({
   name: 'figma-mcp-lite',
   version: pkg.version,
-  description: 'Telas no Figma gastando ~10x menos token que o MCP nativo: subagente Sonnet, spec JSON numa chamada só e os tokens do design system das bibliotecas do próprio arquivo.',
+  description: 'Telas no Figma gastando ~10x menos contexto que o MCP nativo: subagente Sonnet, spec JSON numa chamada só e as variáveis do design system das bibliotecas do próprio arquivo.',
   author: { name: 'Jemerson Barros', email: 'jemersonbarros@gmail.com' },
   license: 'MIT',
   homepage: 'https://github.com/AkiraZ1/figma-mcp-lite',
   repository: 'https://github.com/AkiraZ1/figma-mcp-lite',
-  keywords: ['figma', 'design-system', 'design-tokens', 'mcp', 'subagent'],
+  keywords: ['figma', 'design-system', 'variables', 'mcp', 'subagent'],
 }, null, 2) + '\n');
 
 // Servidor sem dependências: vai legível, só com versão e link do plugin do

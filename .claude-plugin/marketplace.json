@@ -7,8 +7,8 @@
     {
       "name": "figma-mcp-lite",
       "source": "./dist-plugin",
-      "description": "Telas no Figma gastando ~10x menos token que o MCP nativo: subagente Sonnet, spec JSON numa chamada só e os tokens do design system das bibliotecas do próprio arquivo."
+      "description": "Telas no Figma gastando ~10x menos contexto que o MCP nativo: subagente Sonnet, spec JSON numa chamada só e as variáveis do design system das bibliotecas do próprio arquivo."
     }
   ],
-  "description": "figma-mcp-lite: monte telas no Figma com o design system do arquivo gastando ~10x menos token."
+  "description": "figma-mcp-lite: monte telas no Figma com o design system do arquivo gastando ~10x menos contexto."
 }
