@@ -1,21 +1,25 @@
 #!/usr/bin/env node
-// figma-mcp-lite — MCP enxuto pro Figma.
-// Fala com um plugin de desenvolvimento aberto no Figma Desktop por um hub
-// WebSocket local (só loopback). Várias sessões podem rodar ao mesmo tempo:
-// a primeira que sobe vira o hub, as outras se conectam nele.
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { WebSocketServer, WebSocket } from 'ws';
-import { z } from 'zod';
+// figma-mcp-lite — MCP enxuto pro Figma, sem dependências (só módulos do Node).
+// Fala com o plugin figma-mcp-lite aberto no Figma Desktop por um hub local:
+//   - plugin do Figma  ⇄ hub: WebSocket em localhost:PORT (3055)
+//   - sessões do agente ⇄ hub: TCP em 127.0.0.1:PORT+1, uma mensagem JSON por linha
+// Várias sessões podem rodar ao mesmo tempo: a primeira que sobe vira o hub.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
+import http from 'node:http';
+import crypto from 'node:crypto';
+import readline from 'node:readline';
+import { EventEmitter } from 'node:events';
+
+// Preenchido pelo scripts/build-plugin.js no pacote publicado.
+const BUILD = { version: null, pluginUrl: null };
 
 const PORT = Number(process.env.FIGMA_LITE_PORT) || 3055;
+const AGENT_PORT = PORT + 1;
 const HERE = path.dirname(new URL(import.meta.url).pathname);
-// No plugin empacotado a versão vem embutida pelo esbuild; no repo, do package.json.
-const VERSION = typeof __LITE_VERSION__ !== 'undefined' ? __LITE_VERSION__
-  : JSON.parse(fs.readFileSync(path.join(HERE, '..', 'package.json'), 'utf8')).version;
+const VERSION = BUILD.version || JSON.parse(fs.readFileSync(path.join(HERE, '..', 'package.json'), 'utf8')).version;
 const HOME = path.join(os.homedir(), '.figma-mcp-lite');
 const DS_DIR = path.join(HOME, 'ds');
 // Definido pelos agentes figma-lite (Claude Code / Codex). Sem ele, o cliente
@@ -24,17 +28,107 @@ let subagentModel = process.env.FIGMA_LITE_SUBAGENT || null;
 // Arquivo escolhido nesta sessão (figma_status file), quando há plugin em mais de um.
 let targetFile = null;
 
+// ─── WebSocket mínimo (RFC 6455), só servidor e só texto ─────────────────────
+// O plugin do Figma (um iframe) só fala WebSocket. Frames do cliente chegam
+// mascarados; os do servidor saem sem máscara.
+
+class WsConn extends EventEmitter {
+  constructor(sock) {
+    super();
+    this.sock = sock;
+    this.open = true;
+    this.buf = Buffer.alloc(0);
+    this.parts = [];
+    sock.on('data', (d) => { this.buf = Buffer.concat([this.buf, d]); this.parse(); });
+    sock.on('close', () => { if (this.open) { this.open = false; this.emit('close'); } });
+    sock.on('error', () => {});
+  }
+
+  parse() {
+    for (;;) {
+      if (this.buf.length < 2) return;
+      const fin = this.buf[0] & 0x80;
+      const op = this.buf[0] & 0x0f;
+      const masked = this.buf[1] & 0x80;
+      let len = this.buf[1] & 0x7f;
+      let off = 2;
+      if (len === 126) { if (this.buf.length < 4) return; len = this.buf.readUInt16BE(2); off = 4; }
+      else if (len === 127) { if (this.buf.length < 10) return; len = Number(this.buf.readBigUInt64BE(2)); off = 10; }
+      const mask = masked ? this.buf.subarray(off, off + 4) : null;
+      if (masked) off += 4;
+      if (this.buf.length < off + len) return;
+      const data = Buffer.from(this.buf.subarray(off, off + len));
+      this.buf = this.buf.subarray(off + len);
+      if (mask) for (let i = 0; i < data.length; i++) data[i] ^= mask[i & 3];
+      if (op === 0x8) { this.close(1000); return; }
+      if (op === 0x9) { this.frame(0xa, data); continue; }
+      if (op === 0xa) continue;
+      this.parts.push(data);
+      if (fin) { const msg = Buffer.concat(this.parts).toString('utf8'); this.parts = []; this.emit('message', msg); }
+    }
+  }
+
+  frame(op, data) {
+    if (!this.open) return;
+    const n = data.length;
+    const head = n < 126 ? Buffer.from([0x80 | op, n])
+      : n < 65536 ? Buffer.from([0x80 | op, 126, n >> 8, n & 255])
+        : Buffer.concat([Buffer.from([0x80 | op, 127]), (() => { const b = Buffer.alloc(8); b.writeBigUInt64BE(BigInt(n)); return b; })()]);
+    this.sock.write(Buffer.concat([head, data]));
+  }
+
+  send(text) { this.frame(0x1, Buffer.from(text, 'utf8')); }
+
+  close(code) {
+    if (!this.open) return;
+    const b = Buffer.alloc(2);
+    b.writeUInt16BE(code);
+    this.frame(0x8, b);
+    this.open = false;
+    this.sock.end();
+    this.emit('close');
+  }
+}
+
+function listenWs(host, onConn) {
+  return new Promise((resolve) => {
+    const srv = http.createServer((req, res) => { res.writeHead(426); res.end(); });
+    srv.on('upgrade', (req, sock) => {
+      const key = req.headers['sec-websocket-key'];
+      if (!key) return sock.destroy();
+      const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+      sock.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
+      onConn(new WsConn(sock), req);
+    });
+    srv.once('error', () => resolve(null));
+    srv.listen(PORT, host, () => resolve(srv));
+  });
+}
+
+// Conexão TCP de linha em linha, com a mesma cara do WsConn (send / message / close).
+class LineConn extends EventEmitter {
+  constructor(sock) {
+    super();
+    this.sock = sock;
+    this.open = true;
+    readline.createInterface({ input: sock }).on('line', (l) => this.emit('message', l));
+    sock.on('close', () => { if (this.open) { this.open = false; this.emit('close'); } });
+    sock.on('error', () => {});
+  }
+  send(text) { if (this.open) this.sock.write(text + '\n'); }
+}
+
 // ─── hub ─────────────────────────────────────────────────────────────────────
 
 function becomeHub() {
   const agents = new Map(); // gid -> { ws, id, plugin }
   // Um plugin por arquivo aberto (pode haver vários: o arquivo de trabalho e
   // a biblioteca do DS em Dev Mode). Mais recente por último.
-  const plugins = new Map(); // ws -> { file }
+  const plugins = new Map(); // WsConn -> { file }
   let seq = 0;
 
   const pick = (target) => {
-    const open = [...plugins].filter(([w]) => w.readyState === WebSocket.OPEN);
+    const open = [...plugins].filter(([w]) => w.open);
     if (!open.length) return { error: NO_PLUGIN };
     if (target) {
       const t = target.toLowerCase();
@@ -61,56 +155,62 @@ function becomeHub() {
     p.ws.send(JSON.stringify({ ...rest, id: gid }));
   };
 
-  const onConnection = (ws, req) => {
-    // Página web no navegador manda Origin; o iframe do plugin manda "null" e
-    // o Node não manda nada. Qualquer outra origem é site tentando rodar
-    // código no teu Figma — fora.
-    const origin = req.headers.origin;
-    if (origin && origin !== 'null') return ws.close(1008, 'origin');
-    ws.on('message', (raw) => {
-      let msg;
-      try { msg = JSON.parse(raw); } catch { return; }
-      if (msg.hello === 'plugin') {
-        plugins.delete(ws);
-        plugins.set(ws, msg.info || {});
-        return;
-      }
-      if (plugins.has(ws)) {
-        const dest = agents.get(msg.id);
-        if (!dest) return;
-        agents.delete(msg.id);
-        if (dest.ws.readyState === WebSocket.OPEN) dest.ws.send(JSON.stringify({ ...msg, id: dest.id }));
-        return;
-      }
-      forward(ws, msg, Date.now());
-    });
-    ws.on('close', () => {
-      if (!plugins.delete(ws)) return;
-      for (const [gid, dest] of agents) {
-        if (dest.plugin !== ws) continue;
-        agents.delete(gid);
-        if (dest.ws.readyState === WebSocket.OPEN) dest.ws.send(JSON.stringify({ id: dest.id, ok: false, error: 'plugin fechou no meio do comando' }));
-      }
-    });
+  const onMessage = (conn, raw) => {
+    let msg;
+    try { msg = JSON.parse(raw); } catch { return; }
+    if (msg.hello === 'plugin') {
+      plugins.delete(conn);
+      plugins.set(conn, msg.info || {});
+      return;
+    }
+    if (plugins.has(conn)) {
+      const dest = agents.get(msg.id);
+      if (!dest) return;
+      agents.delete(msg.id);
+      dest.ws.send(JSON.stringify({ ...msg, id: dest.id }));
+      return;
+    }
+    forward(conn, msg, Date.now());
   };
 
-  // Dois listeners de loopback (IPv4 e IPv6) em vez de um em todas as
-  // interfaces: o hub executa código no Figma, não pode ficar exposto na rede.
-  const listen = (host) => new Promise((resolve) => {
-    const wss = new WebSocketServer({ host, port: PORT });
-    wss.on('listening', () => { wss.on('connection', onConnection); resolve(wss); });
-    wss.on('error', () => resolve(null));
-  });
-  return listen('127.0.0.1').then(async (v4) => {
+  const onClose = (conn) => {
+    if (!plugins.delete(conn)) return;
+    for (const [gid, dest] of agents) {
+      if (dest.plugin !== conn) continue;
+      agents.delete(gid);
+      dest.ws.send(JSON.stringify({ id: dest.id, ok: false, error: 'plugin fechou no meio do comando' }));
+    }
+  };
+
+  const onPlugin = (ws, req) => {
+    // Página web no navegador manda Origin; o iframe do plugin manda "null".
+    // Qualquer outra origem é site tentando rodar código no teu Figma: fora.
+    const origin = req.headers.origin;
+    if (origin && origin !== 'null') return ws.close(1008);
+    ws.on('message', (raw) => onMessage(ws, raw));
+    ws.on('close', () => onClose(ws));
+  };
+
+  // Só loopback (IPv4 e IPv6), nunca todas as interfaces: o hub executa código
+  // no Figma, não pode ficar exposto na rede.
+  return listenWs('127.0.0.1', onPlugin).then(async (v4) => {
     if (!v4) return false;
-    await listen('::1');
+    await listenWs('::1', onPlugin);
+    await new Promise((resolve) => {
+      const srv = net.createServer((sock) => {
+        const conn = new LineConn(sock);
+        conn.on('message', (raw) => onMessage(conn, raw));
+      });
+      srv.once('error', resolve);
+      srv.listen(AGENT_PORT, '127.0.0.1', resolve);
+    });
     return true;
   });
 }
 
 // Link da página do plugin na Figma Community (publicado oculto: só quem tem o
 // link instala). Vem do package.json "figmaPluginUrl" no build, ou da env.
-const PLUGIN_URL = process.env.FIGMA_LITE_PLUGIN_URL || (typeof __FIGMA_PLUGIN_URL__ !== 'undefined' ? __FIGMA_PLUGIN_URL__ : '');
+const PLUGIN_URL = process.env.FIGMA_LITE_PLUGIN_URL || BUILD.pluginUrl || '';
 const MANIFEST = [path.join(HERE, '..', 'figma-plugin', 'manifest.json'), path.join(HERE, '..', 'plugin', 'manifest.json')].find((p) => fs.existsSync(p));
 const NO_PLUGIN = 'Plugin do Figma "figma-mcp-lite" não encontrado. ' + (PLUGIN_URL
   ? `Instale uma vez: ${PLUGIN_URL} . Depois, no Figma Desktop, abra o arquivo e rode Plugins → figma-mcp-lite: ele fica em segundo plano, com um aviso no rodapé.`
@@ -125,34 +225,39 @@ const pending = new Map();
 
 function openConn() {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${PORT}`);
-    ws.once('open', () => resolve(ws));
-    ws.once('error', reject);
-    ws.on('message', (raw) => {
-      let msg;
-      try { msg = JSON.parse(raw); } catch { return; }
-      const p = pending.get(msg.id);
-      if (!p) return;
-      pending.delete(msg.id);
-      clearTimeout(p.timer);
-      msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error));
+    const sock = net.createConnection(AGENT_PORT, '127.0.0.1');
+    sock.once('connect', () => {
+      const c = new LineConn(sock);
+      c.on('message', (raw) => {
+        let msg;
+        try { msg = JSON.parse(raw); } catch { return; }
+        const p = pending.get(msg.id);
+        if (!p) return;
+        pending.delete(msg.id);
+        clearTimeout(p.timer);
+        msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error));
+      });
+      c.on('close', () => {
+        if (conn === c) conn = null;
+        for (const [id, p] of pending) { pending.delete(id); clearTimeout(p.timer); p.reject(new Error('conexão com o hub caiu; tenta de novo')); }
+      });
+      resolve(c);
     });
-    ws.on('close', () => {
-      if (conn === ws) conn = null;
-      for (const [id, p] of pending) { pending.delete(id); clearTimeout(p.timer); p.reject(new Error('conexão com o hub caiu; tenta de novo')); }
-    });
+    sock.once('error', reject);
   });
 }
 
 async function ensureConn() {
-  if (conn && conn.readyState === WebSocket.OPEN) return conn;
+  if (conn && conn.open) return conn;
   if (connecting) return connecting;
   connecting = (async () => {
     try {
       conn = await openConn();
     } catch {
       // Ninguém escutando (ou o hub anterior morreu com a sessão dele): sobe um.
-      await becomeHub();
+      if (!(await becomeHub())) {
+        throw new Error(`a porta ${PORT} está ocupada por outro programa (ou por uma versão antiga do figma-mcp-lite, de antes da 0.4). Feche as outras sessões do Claude/Codex que usam Figma e tente de novo.`);
+      }
       conn = await openConn();
     }
     return conn;
@@ -176,9 +281,7 @@ const INSTRUCTIONS = `figma-mcp-lite: cria e edita no Figma Desktop por um plugi
 Roda SEMPRE dentro de um subagente, nunca na conversa principal.
 - Claude Code: agente \`figma-lite\` (Sonnet). Codex: agente \`figma-lite\` (gpt-6-luna).
 - Outro cliente: pergunte ao usuário qual modelo usar, abra um subagente com ele e, dentro dele, chame figma_status com subagent_model.
-Fluxo barato: figma_ds (cache) → UM figma_build por tela → UM figma_shot → correções pequenas com figma_run.`;
-
-const server = new McpServer({ name: 'figma-mcp-lite', version: VERSION }, { instructions: INSTRUCTIONS });
+Fluxo barato: figma_ds (cache) → UM figma_build por tela → UM figma_shot → correções pequenas com figma_edit.`;
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
 const fail = (e) => ({ content: [{ type: 'text', text: `erro: ${e.message || e}` }], isError: true });
@@ -188,14 +291,23 @@ function gate() {
   return fail('cliente desconhecido. Pergunte ao usuário qual modelo deve rodar o trabalho de Figma, abra um subagente com esse modelo e, dentro dele, chame figma_status({subagent_model: "<modelo>"}) antes das outras ferramentas.');
 }
 
-const tool = (name, description, inputSchema, handler) =>
-  server.registerTool(name, { description, inputSchema }, async (args) => {
+// Ferramentas: nome → { description, inputSchema (JSON Schema), handler }.
+const TOOLS = new Map();
+const str = (description) => ({ type: 'string', ...(description && { description }) });
+const num = (description) => ({ type: 'number', ...(description && { description }) });
+const bool = (description) => ({ type: 'boolean', ...(description && { description }) });
+
+const tool = (name, description, properties, required, handler) => TOOLS.set(name, {
+  description,
+  inputSchema: { type: 'object', properties, ...(required.length && { required }) },
+  handler: async (args) => {
     if (name !== 'figma_status') { const g = gate(); if (g) return g; }
-    try { return await handler(args); } catch (e) { return fail(e); }
-  });
+    try { return await handler(args || {}); } catch (e) { return fail(e); }
+  },
+});
 
 tool('figma_status', 'Arquivo, página e seleção atuais. file escolhe o arquivo quando o plugin está aberto em mais de um (nome ou trecho). Em cliente desconhecido, informe subagent_model (o modelo que o usuário escolheu) pra liberar as outras ferramentas.',
-  { subagent_model: z.string().optional(), file: z.string().optional() },
+  { subagent_model: str(), file: str() }, [],
   async ({ subagent_model, file }) => {
     if (subagent_model) subagentModel = subagent_model;
     if (file) targetFile = file;
@@ -299,10 +411,10 @@ function guideLines(filter) {
 
 tool('figma_ds', 'Catálogo do design system do arquivo: variáveis locais e de todas as bibliotecas habilitadas (valor + descrição de uso), estilos e componentes (com key). Escaneia uma vez e guarda no arquivo; refresh=true reescaneia. Modo plugin.',
   {
-    filter: z.string().optional().describe('só linhas com um destes trechos, separados por | (ex.: "bg/|text/|padding|gap|radius|heading|button")'),
-    refresh: z.boolean().optional(),
-    docs: z.boolean().optional().describe('só em arquivo de DEFINIÇÃO de uma biblioteca: extrai a documentação (variáveis com descrição completa, playgrounds, exemplos) pra um guia local; devolve só o tamanho'),
-  },
+    filter: str('só linhas com um destes trechos, separados por | (ex.: "bg/|text/|padding|gap|radius|heading|button")'),
+    refresh: bool(),
+    docs: bool('só em arquivo de DEFINIÇÃO de uma biblioteca: extrai a documentação (variáveis com descrição completa, playgrounds, exemplos) pra um guia local; devolve só o tamanho'),
+  }, [],
   async ({ filter, refresh, docs }) => {
     let file = null;
     try { ({ file } = await call('status', {}, 8000)); } catch (e) { if (docs || refresh) throw e; }
@@ -351,7 +463,7 @@ function compact(md) {
 const REMOTE = [path.join(HERE, 'remote.js'), path.join(HERE, '..', 'dist', 'remote.js')].find((p) => fs.existsSync(p));
 
 tool('figma_lite_install', 'Modo remoto: devolve o código JS pra colar no use_figma oficial e instalar o builder lite no arquivo (uma vez por arquivo/versão). Cole o retorno EXATAMENTE como veio.',
-  {},
+  {}, [],
   async () => {
     const src = fs.readFileSync(REMOTE, 'utf8');
     const version = VERSION;
@@ -360,28 +472,64 @@ tool('figma_lite_install', 'Modo remoto: devolve o código JS pra colar no use_f
   });
 
 tool('figma_build', 'Cria uma tela/bloco inteiro a partir de uma spec JSON numa chamada só (formato no prompt do agente). Retorna id do nó raiz e avisos.',
-  { spec: z.any().describe('nó raiz da spec'), parent: z.string().optional().describe('id do nó onde inserir; padrão: nova raiz na página') },
+  { spec: { description: 'nó raiz da spec (objeto JSON)' }, parent: str('id do nó onde inserir; padrão: nova raiz na página') }, ['spec'],
   async ({ spec, parent }) => {
     const s = typeof spec === 'string' ? JSON.parse(spec) : spec;
     return text(JSON.stringify(await call('build', { spec: s, parent }, 120000)));
   });
 
-tool('figma_run', 'Executa JS da Plugin API (async; `figma` e helpers `h` disponíveis). Use pra correções pontuais. Retorne algo pequeno — a saída é cortada em max_chars.',
-  { code: z.string(), max_chars: z.number().optional() },
-  async ({ code, max_chars }) => text(await call('run', { code, max: max_chars || 2000 }, 120000)));
+tool('figma_edit', 'Correção pontual num nó existente, sem reconstruir: mesmos campos da spec (n, text, type, color, fill, stroke, sw, r, o, w, h, gap, pad, align, cross, layout), parent+index pra mover, remove:true pra apagar.',
+  { id: str('id do nó'), patch: { type: 'object', description: 'campos a mudar' } }, ['id', 'patch'],
+  async ({ id, patch }) => text(JSON.stringify(await call('edit', { id, patch: typeof patch === 'string' ? JSON.parse(patch) : patch }, 60000))));
 
 tool('figma_tree', 'Contorno compacto de um nó (tipo, id, nome, tamanho). Padrão: seleção ou página atual.',
-  { id: z.string().optional(), depth: z.number().optional(), max_lines: z.number().optional() },
+  { id: str(), depth: num(), max_lines: num() }, [],
   async ({ id, depth, max_lines }) => text(await call('tree', { id, depth: depth ?? 2, max: max_lines || 120 })));
 
 tool('figma_shot', 'PNG pequeno de um nó pra conferir o resultado. Use uma vez no fim, não a cada passo.',
-  { id: z.string(), width: z.number().optional().describe('largura máx em px, padrão 480') },
+  { id: str(), width: num('largura máx em px, padrão 480') }, ['id'],
   async ({ id, width }) => {
     const b64 = await call('shot', { id, width: width || 480 }, 60000);
     return { content: [{ type: 'image', data: b64, mimeType: 'image/png' }] };
   });
 
+// ─── MCP por stdio: JSON-RPC 2.0, uma mensagem por linha ─────────────────────
+
+const reply = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n');
+
+async function handle(req) {
+  const { id, method, params } = req;
+  if (id === undefined || id === null) return; // notificação (ex.: notifications/initialized)
+  try {
+    if (method === 'initialize') {
+      return reply({ id, result: {
+        protocolVersion: (params && params.protocolVersion) || '2025-06-18',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'figma-mcp-lite', version: VERSION },
+        instructions: INSTRUCTIONS,
+      } });
+    }
+    if (method === 'ping') return reply({ id, result: {} });
+    if (method === 'tools/list') {
+      return reply({ id, result: { tools: [...TOOLS].map(([name, t]) => ({ name, description: t.description, inputSchema: t.inputSchema })) } });
+    }
+    if (method === 'tools/call') {
+      const t = TOOLS.get(params && params.name);
+      if (!t) return reply({ id, error: { code: -32602, message: `ferramenta desconhecida: ${params && params.name}` } });
+      return reply({ id, result: await t.handler(params.arguments) });
+    }
+    reply({ id, error: { code: -32601, message: `método não suportado: ${method}` } });
+  } catch (e) {
+    reply({ id, error: { code: -32603, message: String(e.message || e) } });
+  }
+}
+
+readline.createInterface({ input: process.stdin }).on('line', (line) => {
+  let req;
+  try { req = JSON.parse(line); } catch { return; }
+  handle(req);
+}).on('close', () => process.exit(0));
+
 // Sobe o hub logo no boot (se a porta estiver livre) pra o plugin achar
 // alguém escutando assim que o usuário abrir ele.
 ensureConn().catch(() => {});
-await server.connect(new StdioServerTransport());

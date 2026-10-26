@@ -29,7 +29,7 @@ figma.ui.onmessage = async function (msg) {
     const handler = HANDLERS[msg.cmd];
     if (!handler) throw new Error('comando desconhecido: ' + msg.cmd);
     // Dev Mode (arquivo só de visualização) é leitura: status, ds, tree, shot, docs.
-    if (figma.editorType === 'dev' && msg.cmd === 'build') {
+    if (figma.editorType === 'dev' && (msg.cmd === 'build' || msg.cmd === 'edit')) {
       throw new Error('Dev Mode é só leitura: ' + msg.cmd + ' precisa de um arquivo com edição aberto no modo Design');
     }
     res = { id: msg.id, ok: true, result: await handler(msg.args || {}) };
@@ -51,18 +51,6 @@ function rgbToHex(c) {
 
 function brief(n) {
   return { id: n.id, type: n.type, name: n.name };
-}
-
-function serialize(v, depth) {
-  depth = depth || 0;
-  if (v === null || v === undefined) return v;
-  if (typeof v !== 'object') return v;
-  if (depth > 4) return '…';
-  if (typeof v.id === 'string' && typeof v.type === 'string' && 'name' in v) return brief(v);
-  if (Array.isArray(v)) return v.slice(0, 50).map(function (x) { return serialize(x, depth + 1); });
-  const out = {};
-  Object.keys(v).slice(0, 50).forEach(function (k) { out[k] = serialize(v[k], depth + 1); });
-  return out;
 }
 
 async function nodeOrThrow(id) {
@@ -113,15 +101,8 @@ HANDLERS.tree = async function (a) {
   return lines.join('\n');
 };
 
-const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-
-HANDLERS.run = async function (a) {
-  const fn = new AsyncFunction('figma', 'h', a.code);
-  const out = await fn(figma, HELPERS);
-  let s = out === undefined ? 'ok' : JSON.stringify(serialize(out));
-  if (s.length > a.max) s = s.slice(0, a.max) + '… (+' + (s.length - a.max) + ' chars)';
-  return s;
-};
+// Correção pontual: operações estruturadas da lib (sem executar código recebido).
+HANDLERS.edit = async function (a) { return LITE.edit(a.id, a.patch || {}); };
 
 HANDLERS.shot = async function (a) {
   const n = await nodeOrThrow(a.id);
@@ -198,11 +179,3 @@ HANDLERS.docs_page = async function (a) {
 // ─── build ───────────────────────────────────────────────────────────────────
 
 HANDLERS.build = async function (a) { return LITE.build(a.spec, a.parent); };
-
-const HELPERS = {
-  build: function (spec, parentId) { return LITE.build(spec, parentId); },
-  node: function (id) { return figma.getNodeByIdAsync(id); },
-  find: function (name, from) { return (from || figma.currentPage).findOne(function (n) { return n.name === name; }); },
-  paint: function (color) { return LITE.paint(color); },
-  font: function (family, style) { return figma.loadFontAsync({ family: family || 'Inter', style: style || 'Regular' }); },
-};

@@ -30,7 +30,7 @@ figma.ui.onmessage = async function (msg) {
     const handler = HANDLERS[msg.cmd];
     if (!handler) throw new Error('comando desconhecido: ' + msg.cmd);
     // Dev Mode (arquivo só de visualização) é leitura: status, ds, tree, shot, docs.
-    if (figma.editorType === 'dev' && msg.cmd === 'build') {
+    if (figma.editorType === 'dev' && (msg.cmd === 'build' || msg.cmd === 'edit')) {
       throw new Error('Dev Mode é só leitura: ' + msg.cmd + ' precisa de um arquivo com edição aberto no modo Design');
     }
     res = { id: msg.id, ok: true, result: await handler(msg.args || {}) };
@@ -54,18 +54,6 @@ function brief(n) {
   return { id: n.id, type: n.type, name: n.name };
 }
 
-function serialize(v, depth) {
-  depth = depth || 0;
-  if (v === null || v === undefined) return v;
-  if (typeof v !== 'object') return v;
-  if (depth > 4) return '…';
-  if (typeof v.id === 'string' && typeof v.type === 'string' && 'name' in v) return brief(v);
-  if (Array.isArray(v)) return v.slice(0, 50).map(function (x) { return serialize(x, depth + 1); });
-  const out = {};
-  Object.keys(v).slice(0, 50).forEach(function (k) { out[k] = serialize(v[k], depth + 1); });
-  return out;
-}
-
 async function nodeOrThrow(id) {
   const n = await figma.getNodeByIdAsync(id);
   if (!n) throw new Error('nó não encontrado: ' + id);
@@ -82,7 +70,7 @@ const LITE = (function (figma) {
 // setPluginData, loadAllPagesAsync nem fetch; sem crase nem "${" no fonte
 // (a instalação embrulha o código minificado em String.raw).
 
-var V = '0.3.2';
+var V = '0.4.0';
 var NS = 'lite';
 var ALIGN = { start: 'MIN', center: 'CENTER', end: 'MAX', between: 'SPACE_BETWEEN', baseline: 'BASELINE' };
 var WEIGHT = { 100: 'Thin', 200: 'Extra Light', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semi Bold', 700: 'Bold', 800: 'Extra Bold', 900: 'Black' };
@@ -563,7 +551,52 @@ async function build(spec, parentId) {
   return out;
 }
 
-return { v: V, build: build, catalog: catalog, reindex: reindex, paint: function (c) { return new Builder().paint(c); } };
+// Correção pontual sem código arbitrário: aplica num nó existente os mesmos
+// campos da spec. patch: { n, text, type, color, fill, stroke, sw, r, o, w, h,
+// gap, pad, align, cross, layout, x, y, parent (id: move pra dentro), index,
+// remove: true }.
+async function edit(id, patch) {
+  var b = new Builder();
+  var node = await figma.getNodeByIdAsync(id);
+  if (!node) throw new Error('nó não encontrado: ' + id);
+  if (patch.remove) { node.remove(); return { v: V, id: id, removed: true }; }
+  if (patch.n) node.name = patch.n;
+  if (node.type === 'TEXT') {
+    if (patch.type) await b.typeRole(node, patch);
+    if (patch.text !== undefined) {
+      if (node.fontName !== figma.mixed) await figma.loadFontAsync(node.fontName);
+      node.characters = String(patch.text);
+    }
+    if (patch.color) { var p = await b.paint(patch.color); if (p) node.fills = [p]; }
+  }
+  if (node.layoutMode !== undefined && node.layoutMode !== 'NONE') {
+    if (patch.layout) node.layoutMode = patch.layout === 'H' ? 'HORIZONTAL' : 'VERTICAL';
+    await b.num(node, 'itemSpacing', patch.gap);
+    if (patch.pad !== undefined) {
+      var pd = Array.isArray(patch.pad) ? patch.pad : [patch.pad];
+      var t = pd[0], r = pd.length > 1 ? pd[1] : pd[0], bt = pd.length > 2 ? pd[2] : pd[0], l = pd.length > 3 ? pd[3] : r;
+      await b.num(node, 'paddingTop', t); await b.num(node, 'paddingRight', r);
+      await b.num(node, 'paddingBottom', bt); await b.num(node, 'paddingLeft', l);
+    }
+    if (patch.align) node.primaryAxisAlignItems = ALIGN[patch.align] || 'MIN';
+    if (patch.cross) node.counterAxisAlignItems = ALIGN[patch.cross] || 'MIN';
+  }
+  var common = {};
+  ['fill', 'stroke', 'sw', 'r', 'o', 'effect', 'clip'].forEach(function (k) { if (patch[k] !== undefined) common[k] = patch[k]; });
+  if (common.sw !== undefined && common.stroke === undefined) await b.num(node, 'strokeWeight', common.sw);
+  await b.common(node, common);
+  if (patch.parent) {
+    var dest = await figma.getNodeByIdAsync(patch.parent);
+    if (!dest) throw new Error('nó pai não encontrado: ' + patch.parent);
+    if (patch.index !== undefined) dest.insertChild(patch.index, node); else dest.appendChild(node);
+  }
+  await b.size(node, patch, node.parent);
+  var out = { v: V, id: node.id, size: Math.round(node.width) + 'x' + Math.round(node.height) };
+  if (b.warn.length) out.warn = b.warn;
+  return out;
+}
+
+return { v: V, build: build, edit: edit, catalog: catalog, reindex: reindex };
 
 })(figma);
 
@@ -604,15 +637,8 @@ HANDLERS.tree = async function (a) {
   return lines.join('\n');
 };
 
-const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-
-HANDLERS.run = async function (a) {
-  const fn = new AsyncFunction('figma', 'h', a.code);
-  const out = await fn(figma, HELPERS);
-  let s = out === undefined ? 'ok' : JSON.stringify(serialize(out));
-  if (s.length > a.max) s = s.slice(0, a.max) + '… (+' + (s.length - a.max) + ' chars)';
-  return s;
-};
+// Correção pontual: operações estruturadas da lib (sem executar código recebido).
+HANDLERS.edit = async function (a) { return LITE.edit(a.id, a.patch || {}); };
 
 HANDLERS.shot = async function (a) {
   const n = await nodeOrThrow(a.id);
@@ -689,11 +715,3 @@ HANDLERS.docs_page = async function (a) {
 // ─── build ───────────────────────────────────────────────────────────────────
 
 HANDLERS.build = async function (a) { return LITE.build(a.spec, a.parent); };
-
-const HELPERS = {
-  build: function (spec, parentId) { return LITE.build(spec, parentId); },
-  node: function (id) { return figma.getNodeByIdAsync(id); },
-  find: function (name, from) { return (from || figma.currentPage).findOne(function (n) { return n.name === name; }); },
-  paint: function (color) { return LITE.paint(color); },
-  font: function (family, style) { return figma.loadFontAsync({ family: family || 'Inter', style: style || 'Regular' }); },
-};

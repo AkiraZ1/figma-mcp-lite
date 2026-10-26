@@ -3,7 +3,7 @@
 //   .claude-plugin/plugin.json   manifesto
 //   agents/figma-lite.md         subagente Sonnet (único que pode usar as ferramentas)
 //   .mcp.json + hooks/           servidor do plugin + hook que barra uso fora do subagente
-//   server/server.mjs            servidor MCP num arquivo só (sem node_modules)
+//   server/server.mjs            servidor MCP sem dependências (só módulos do Node)
 //   server/remote.js             builder minificado pro modo remoto
 //   figma-plugin/                plugin do Figma Desktop (importar pelo manifest)
 //   README.md
@@ -11,7 +11,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { buildSync } from 'esbuild';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist-plugin');
@@ -33,16 +32,13 @@ write('.claude-plugin/plugin.json', JSON.stringify({
   keywords: ['figma', 'design-system', 'design-tokens', 'mcp', 'subagent'],
 }, null, 2) + '\n');
 
-buildSync({
-  entryPoints: [path.join(ROOT, 'src/server.js')],
-  outfile: path.join(OUT, 'server/server.mjs'),
-  bundle: true, platform: 'node', format: 'esm', target: 'node20', minify: true, legalComments: 'none',
-  define: { __LITE_VERSION__: JSON.stringify(pkg.version), __FIGMA_PLUGIN_URL__: JSON.stringify(pkg.figmaPluginUrl || '') },
-  // ws tem dependências nativas opcionais; sem elas usa o fallback em JS puro.
-  external: ['bufferutil', 'utf-8-validate'],
-  // Pacotes CommonJS (ws) dentro de ESM precisam de require.
-  banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },
-});
+// Servidor sem dependências: vai legível, só com versão e link do plugin do
+// Figma preenchidos (nada de bundle minificado pra revisão).
+const server = fs.readFileSync(path.join(ROOT, 'src/server.js'), 'utf8');
+const BUILD_LINE = 'const BUILD = { version: null, pluginUrl: null };';
+if (!server.includes(BUILD_LINE)) throw new Error('src/server.js sem a linha BUILD');
+write('server/server.mjs', server.replace(BUILD_LINE,
+  `const BUILD = { version: ${JSON.stringify(pkg.version)}, pluginUrl: ${JSON.stringify(pkg.figmaPluginUrl || null)} };`));
 copy('dist/remote.js', 'server/remote.js');
 
 for (const f of ['manifest.json', 'code.js', 'ui.html']) copy(`plugin/${f}`, `figma-plugin/${f}`);
@@ -57,13 +53,14 @@ write('.mcp.json', JSON.stringify({ mcpServers: { lite: {
   // aqui o hook já garante o subagente.
   env: { FIGMA_LITE_SUBAGENT: 'claude-code-plugin' },
 } } }, null, 2) + '\n');
-copy('hooks/only-subagent.mjs', 'hooks/only-subagent.mjs');
+copy('hooks/only-subagent.sh', 'hooks/only-subagent.sh');
+fs.chmodSync(path.join(OUT, 'hooks/only-subagent.sh'), 0o755);
 write('hooks/hooks.json', JSON.stringify({ hooks: { PreToolUse: [{
   matcher: 'mcp__plugin_figma-mcp-lite_lite__.*',
-  hooks: [{ type: 'command', command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/only-subagent.mjs"' }],
+  hooks: [{ type: 'command', command: '"${CLAUDE_PLUGIN_ROOT}/hooks/only-subagent.sh"' }],
 }] } }, null, 2) + '\n');
 
-const TOOLS = ['figma_ds', 'figma_lite_install', 'figma_status', 'figma_build', 'figma_run', 'figma_tree', 'figma_shot'];
+const TOOLS = ['figma_ds', 'figma_lite_install', 'figma_status', 'figma_build', 'figma_edit', 'figma_tree', 'figma_shot'];
 write('agents/figma-lite.md', `---
 name: figma-lite
 description: Use para QUALQUER tarefa no Figma (criar ou editar tela, componente, layout, ler o design system de um arquivo). É o único caminho pro Figma: a conversa principal não pode usar as ferramentas do figma-mcp-lite. Passe o pedido completo (tela, conteúdo, estados e o link do arquivo) numa mensagem só.

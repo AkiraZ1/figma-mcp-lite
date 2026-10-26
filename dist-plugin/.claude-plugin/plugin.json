@@ -1,6 +1,6 @@
 {
   "name": "figma-mcp-lite",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Telas no Figma gastando ~10x menos token que o MCP nativo: subagente Sonnet, spec JSON numa chamada só e os tokens do design system das bibliotecas do próprio arquivo.",
   "author": {
     "name": "Jemerson Barros",

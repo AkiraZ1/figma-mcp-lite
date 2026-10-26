@@ -23,7 +23,7 @@ function fakePlugin(file = 'Arquivo Teste') {
   ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     const result = m.cmd === 'status' ? { file, page: 'P1', selection: [] }
-      : m.cmd === 'run' ? `rodou ${m.args.code.length} chars`
+      : m.cmd === 'edit' ? { id: m.args.id, patched: Object.keys(m.args.patch).join(',') }
       : m.cmd === 'build' ? { id: '1:2', nodes: 3 } : null;
     ws.send(JSON.stringify({ id: m.id, ok: true, result }));
   });
@@ -58,10 +58,10 @@ await check('ferramentas e instruções enxutas', async () => {
 
 const b = await mcp({});
 await check('segunda sessão sem env: trava até informar modelo', async () => {
-  const r = await b.callTool({ name: 'figma_run', arguments: { code: 'return 1' } });
+  const r = await b.callTool({ name: 'figma_edit', arguments: { id: '1:2', patch: { n: 'x' } } });
   assert.ok(r.isError && txt(r).includes('subagent_model'));
   await b.callTool({ name: 'figma_status', arguments: { subagent_model: 'gpt-x' } });
-  assert.equal(txt(await b.callTool({ name: 'figma_run', arguments: { code: 'return 1' } })), 'rodou 8 chars');
+  assert.equal(JSON.parse(txt(await b.callTool({ name: 'figma_edit', arguments: { id: '1:2', patch: { n: 'x', fill: '$bg' } } }))).patched, 'n,fill');
 });
 
 await check('build repassa a spec', async () => {

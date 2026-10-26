@@ -20,7 +20,7 @@ cat > "$HOME/.claude/agents/figma-lite.md" <<EOF
 name: figma-lite
 description: Use para QUALQUER tarefa no Figma (criar ou editar tela, componente, layout, ler o design system de um arquivo). É o único caminho pro Figma, a conversa principal não tem as ferramentas. Passe o pedido completo (tela, conteúdo, estados) numa mensagem só.
 model: sonnet
-tools: mcp__claude_ai_Figma__use_figma, mcp__claude_ai_Figma__search_design_system, mcp__figma-mcp-lite__figma_ds, mcp__figma-mcp-lite__figma_lite_install, mcp__figma-mcp-lite__figma_status, mcp__figma-mcp-lite__figma_build, mcp__figma-mcp-lite__figma_run, mcp__figma-mcp-lite__figma_tree, mcp__figma-mcp-lite__figma_shot, Read
+tools: mcp__claude_ai_Figma__use_figma, mcp__claude_ai_Figma__search_design_system, mcp__figma-mcp-lite__figma_ds, mcp__figma-mcp-lite__figma_lite_install, mcp__figma-mcp-lite__figma_status, mcp__figma-mcp-lite__figma_build, mcp__figma-mcp-lite__figma_edit, mcp__figma-mcp-lite__figma_tree, mcp__figma-mcp-lite__figma_shot, Read
 mcpServers:
   - figma-mcp-lite:
       type: stdio
