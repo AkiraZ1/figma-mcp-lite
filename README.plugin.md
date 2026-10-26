@@ -21,7 +21,7 @@ Monta telas no Figma gastando **~10× menos token** que o fluxo nativo da Figma 
    ```
    /plugin install figma-mcp-lite --marketplace AkiraZ1/figma-mcp-lite
    ```
-2. Instala o plugin **figma-mcp-lite** no Figma Desktop pela Community: https://www.figma.com/community/plugin/1696575160680183036 (se ele não estiver aberto, o agente te lembra com esse link). Pra desenvolver, importa o manifest de `plugin-dev/` (sem o id do plugin publicado): Figma Desktop → Plugins → Development → Import plugin from manifest.
+2. Instala o plugin **figma-mcp-lite** no Figma Desktop pela Community: https://www.figma.com/community/plugin/1696575160680183036 (se ele não estiver aberto, o agente te lembra com esse link). Pra desenvolver, importa o manifest de `plugin-dev/` (id próprio de desenvolvimento, separado do plugin publicado): Figma Desktop → Plugins → Development → Import plugin from manifest.
 3. No Figma Desktop, abre o arquivo e roda **Plugins → figma-mcp-lite**. Ele fica em segundo plano, só com um aviso no rodapé ("conectado, rodando em segundo plano"), e tem um botão **Parar**.
 
 Requer Node 20+ (o Claude Code já usa).
