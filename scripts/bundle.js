@@ -21,9 +21,9 @@ fs.writeFileSync(path.join(ROOT, 'plugin/code.js'),
 // plugin publicado na Community.
 const DEV = path.join(ROOT, 'plugin-dev');
 fs.mkdirSync(DEV, { recursive: true });
-const { id, ...rest } = JSON.parse(read('plugin/manifest.json'));
+const { id, name, ...rest } = JSON.parse(read('plugin/manifest.json'));
 const { figmaDevPluginId } = JSON.parse(read('package.json'));
-const devManifest = { name: rest.name + ' (dev)', ...(figmaDevPluginId && { id: figmaDevPluginId }), ...rest, name: rest.name + ' (dev)' };
+const devManifest = { name: name + ' (dev)', ...(figmaDevPluginId && { id: figmaDevPluginId }), ...rest };
 fs.writeFileSync(path.join(DEV, 'manifest.json'), JSON.stringify(devManifest, null, 2) + '\n');
 for (const f of ['code.js', 'ui.html']) fs.copyFileSync(path.join(ROOT, 'plugin', f), path.join(DEV, f));
 
