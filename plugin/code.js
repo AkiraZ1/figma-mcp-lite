@@ -70,7 +70,7 @@ const LITE = (function (figma) {
 // setPluginData, loadAllPagesAsync nem fetch; sem crase nem "${" no fonte
 // (a instalação embrulha o código minificado em String.raw).
 
-var V = '0.4.3';
+var V = '0.4.4';
 var NS = 'lite';
 var ALIGN = { start: 'MIN', center: 'CENTER', end: 'MAX', between: 'SPACE_BETWEEN', baseline: 'BASELINE' };
 var WEIGHT = { 100: 'Thin', 200: 'Extra Light', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semi Bold', 700: 'Bold', 800: 'Extra Bold', 900: 'Black' };
@@ -264,6 +264,33 @@ async function scan() {
   return cat;
 }
 
+// Grupo grande (2 primeiros níveis do nome, ex. "bg/accent", com mais de 6
+// variáveis) que o filtro não pediu pelo nome vira uma linha só, com os
+// nomes e sem valores. Mantém o catálogo curto sem saber nada do DS: pra ver
+// os valores, o agente pede o grupo no filtro ("bg/accent").
+function collapse(lines, fs) {
+  var groups = {};
+  lines.forEach(function (l) {
+    var m = /^\$([^/ ]+\/[^/ ]+)\/(\S+) /.exec(l);
+    if (m) (groups[m[1]] = groups[m[1]] || []).push(m[2]);
+  });
+  var big = {};
+  Object.keys(groups).forEach(function (g) {
+    var asked = fs.some(function (f) { return f.indexOf(g.toLowerCase()) >= 0; });
+    if (groups[g].length > 6 && !asked) big[g] = true;
+  });
+  var out = [];
+  var done = {};
+  lines.forEach(function (l) {
+    var m = /^\$([^/ ]+\/[^/ ]+)\//.exec(l);
+    if (!m || !big[m[1]]) { out.push(l); return; }
+    if (done[m[1]]) return;
+    done[m[1]] = true;
+    out.push('$' + m[1] + '/… (' + groups[m[1]].length + ', valores com filter "' + m[1] + '"): ' + groups[m[1]].join(' '));
+  });
+  return out;
+}
+
 // Saída compacta: agrupada por coleção; props tipográficas de um mesmo prefixo
 // (…/font-size, …/line-height…) viram uma linha "type <prefixo>: …".
 function fmtCatalog(cat, filter) {
@@ -290,7 +317,7 @@ function fmtCatalog(cat, filter) {
       lines.push('$' + r[1] + ' ' + r[2] + (r[3] ? ' · ' + r[3] : ''));
     });
     typeOrder.forEach(function (t) { lines.push('type ' + t + ': ' + types[t].join(', ')); });
-    lines = lines.filter(keep);
+    lines = collapse(lines.filter(keep), fs);
     if (lines.length) out.push('## ' + g + '\n' + lines.join('\n'));
   });
   var st = cat.styles.filter(keep);
