@@ -5,7 +5,6 @@
 //   .mcp.json + hooks/           servidor do plugin + hook que barra uso fora do subagente
 //   server/server.mjs            servidor MCP sem dependências (só módulos do Node)
 //   server/remote.js             builder minificado pro modo remoto
-//   figma-plugin/                plugin do Figma Desktop (importar pelo manifest)
 //   README.md
 import fs from 'node:fs';
 import path from 'node:path';
@@ -41,7 +40,8 @@ write('server/server.mjs', server.replace(BUILD_LINE,
   `const BUILD = { version: ${JSON.stringify(pkg.version)}, pluginUrl: ${JSON.stringify(pkg.figmaPluginUrl || null)} };`));
 copy('dist/remote.js', 'server/remote.js');
 
-for (const f of ['manifest.json', 'code.js', 'ui.html']) copy(`plugin/${f}`, `figma-plugin/${f}`);
+// O plugin do Figma NÃO vai no pacote do Claude: é instalado pela Figma
+// Community (link na mensagem de instalação). Fica em plugin/ no repositório.
 
 const prompt = fs.readFileSync(path.join(ROOT, 'agents/prompt.md'), 'utf8').replaceAll('__VERSION__', pkg.version);
 // Agente de plugin não pode declarar MCP próprio (o Claude Code ignora

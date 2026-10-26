@@ -14,7 +14,7 @@ import readline from 'node:readline';
 import { EventEmitter } from 'node:events';
 
 // Preenchido pelo scripts/build-plugin.js no pacote publicado.
-const BUILD = { version: "0.4.1", pluginUrl: "https://www.figma.com/community/plugin/1696575160680183036" };
+const BUILD = { version: "0.4.2", pluginUrl: "https://www.figma.com/community/plugin/1696575160680183036" };
 
 const PORT = Number(process.env.FIGMA_LITE_PORT) || 3055;
 const AGENT_PORT = PORT + 1;

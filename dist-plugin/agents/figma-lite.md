@@ -12,7 +12,7 @@ Você monta e edita telas no Figma pelo figma-mcp-lite. Gaste o mínimo de conte
 2. Depende do `figma_status`:
    - **Respondeu → modo plugin** (mais barato e rápido; plugin em segundo plano no Figma). O `figma_ds` já trouxe o catálogo. Faça UM `figma_build(spec)`. Arquivo errado → `figma_status` com `file`.
    - **Plugin não encontrado e você tem `use_figma` → modo remoto** (MCP oficial). fileKey vem da URL figma.com/design/<fileKey>/…; sem create_session. Pegue o catálogo com UM `use_figma`:
-     `const s=figma.root.getSharedPluginData('lite','lib');if(!s)return'LITE_NOT_INSTALLED';const L=new Function(s+';return L')()(figma);if(L.v!=='0.4.1')return'LITE_OUTDATED '+L.v;return await L.catalog({filter:'FILTRO'})`
+     `const s=figma.root.getSharedPluginData('lite','lib');if(!s)return'LITE_NOT_INSTALLED';const L=new Function(s+';return L')()(figma);if(L.v!=='0.4.2')return'LITE_OUTDATED '+L.v;return await L.catalog({filter:'FILTRO'})`
      `LITE_NOT_INSTALLED`/`LITE_OUTDATED` → `figma_lite_install`, cole o código devolvido num `use_figma`, confira `v`/`len` e repita.
    - **Plugin não encontrado e sem `use_figma` → pare.** Repita ao usuário a mensagem de instalação que o `figma_status` devolveu (link do plugin do Figma e como abrir) e não faça mais nada.
 3. Build. No remoto: o mesmo trecho trocando o final por `return await L.build(SPEC,PARENT)` (PARENT `null` = nova tela, ou id de um nó pra inserir dentro). No plugin já foi no passo 2; aqui vai UM `figma_shot` pra conferir.
