@@ -211,7 +211,7 @@ function becomeHub() {
 // Link da página do plugin na Figma Community (publicado oculto: só quem tem o
 // link instala). Vem do package.json "figmaPluginUrl" no build, ou da env.
 const PLUGIN_URL = process.env.FIGMA_LITE_PLUGIN_URL || BUILD.pluginUrl || '';
-const MANIFEST = [path.join(HERE, '..', 'figma-plugin', 'manifest.json'), path.join(HERE, '..', 'plugin', 'manifest.json')].find((p) => fs.existsSync(p));
+const MANIFEST = [path.join(HERE, '..', 'plugin-dev', 'manifest.json'), path.join(HERE, '..', 'plugin', 'manifest.json')].find((p) => fs.existsSync(p));
 const NO_PLUGIN = 'Plugin do Figma "figma-mcp-lite" não encontrado. ' + (PLUGIN_URL
   ? `Instale uma vez: ${PLUGIN_URL} . Depois, no Figma Desktop, abra o arquivo e rode Plugins → figma-mcp-lite: ele fica em segundo plano, com um aviso no rodapé.`
   : `Instale uma vez no Figma Desktop: Plugins → Development → Import plugin from manifest → ${MANIFEST || 'figma-plugin/manifest.json (dentro do plugin figma-mcp-lite)'} . Depois abra o arquivo e rode Plugins → Development → figma-mcp-lite: ele fica em segundo plano, com um aviso no rodapé.`);

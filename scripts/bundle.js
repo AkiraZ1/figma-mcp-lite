@@ -16,6 +16,15 @@ fs.writeFileSync(path.join(ROOT, 'plugin/code.js'),
   '// GERADO por scripts/bundle.js a partir de plugin/code.src.js + lib/builder.js — não edite.\n' +
   read('plugin/code.src.js').replace('/*@BUILDER@*/', () => builder)); // função: o fonte tem "$'", que replace() trataria como padrão
 
+// plugin-dev/: mesma coisa sem o "id" do plugin publicado na Community, pra
+// quem clona o repositório importar como plugin de desenvolvimento.
+const DEV = path.join(ROOT, 'plugin-dev');
+fs.mkdirSync(DEV, { recursive: true });
+const { id, ...devManifest } = JSON.parse(read('plugin/manifest.json'));
+devManifest.name = devManifest.name + ' (dev)';
+fs.writeFileSync(path.join(DEV, 'manifest.json'), JSON.stringify(devManifest, null, 2) + '\n');
+for (const f of ['code.js', 'ui.html']) fs.copyFileSync(path.join(ROOT, 'plugin', f), path.join(DEV, f));
+
 // No remoto o fonte vai embrulhado em String.raw na instalação: sem template
 // literal no minificado, não sobra crase nem "${" pra quebrar o embrulho.
 const { code } = transformSync(`var L=function(figma){${builder}\n};`, {
