@@ -1,0 +1,24 @@
+{
+  "name": "figma-mcp-lite",
+  "id": "1696575160680183036",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": [
+    "figma",
+    "dev"
+  ],
+  "capabilities": [
+    "inspect"
+  ],
+  "documentAccess": "dynamic-page",
+  "permissions": [
+    "teamlibrary"
+  ],
+  "networkAccess": {
+    "allowedDomains": [
+      "ws://localhost:3055"
+    ],
+    "reasoning": "Conecta só no servidor figma-mcp-lite rodando na própria máquina do usuário (localhost), que repassa os comandos do agente de IA. Nenhum dado sai pra internet."
+  }
+}
