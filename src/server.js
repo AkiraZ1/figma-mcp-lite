@@ -215,7 +215,7 @@ const MANIFEST = [path.join(HERE, '..', 'plugin-dev', 'manifest.json'), path.joi
 // Só aparece quando o plugin NÃO está conectado: o caminho de instalação e o
 // modo remoto ficam fora do prompt do agente, pra não pesar no uso normal.
 const INSTALL = PLUGIN_URL
-  ? `Instale uma vez: ${PLUGIN_URL} . Depois, no Figma Desktop, abra o arquivo e rode Plugins → figma-mcp-lite: ele fica em segundo plano, com um aviso no rodapé.`
+  ? `Instale uma vez: ${PLUGIN_URL} . Depois, no Figma Desktop, abra o arquivo e rode Plugins → figma-mcp-lite (ou o atalho do último plugin: ⌘⌥P no Mac, Ctrl+Alt+P no Windows, ou o botão "Conectar figma-mcp-lite" no painel da direita, que aparece nos arquivos onde ele já rodou). Ele fica em segundo plano, com um aviso no rodapé.`
   : `Instale uma vez no Figma Desktop: Plugins → Development → Import plugin from manifest → ${MANIFEST || 'plugin-dev/manifest.json'} . Depois abra o arquivo e rode Plugins → Development → figma-mcp-lite: ele fica em segundo plano, com um aviso no rodapé.`;
 const SNIPPET = (end) => `const s=figma.root.getSharedPluginData('lite','lib');if(!s)return'LITE_NOT_INSTALLED';const L=new Function(s+';return L')()(figma);if(L.v!=='${VERSION}')return'LITE_OUTDATED '+L.v;return await L.${end}`;
 const NO_PLUGIN = 'Plugin do Figma "figma-mcp-lite" não encontrado.\n' +

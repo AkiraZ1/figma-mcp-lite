@@ -14,8 +14,8 @@ Este fluxo substitui o fluxo nativo da Figma. **Não carregue figma-use, figma-g
 fileKey vem da URL figma.com/design/<fileKey>/…
 
 1. **Catálogo:** UM `use_figma` com exatamente este código, trocando só FILTRO pelos grupos que a tela usa (ex.: "bg/|text/|border/|padding|gap|radius|heading|body|button|input"):
-   `const s=figma.root.getSharedPluginData('lite','lib');if(!s)return'LITE_NOT_INSTALLED';const L=new Function(s+';return L')()(figma);if(L.v!=='0.5.2')return'LITE_OUTDATED '+L.v;return await L.catalog({filter:'FILTRO'})`
-   - `LITE_NOT_INSTALLED` ou `LITE_OUTDATED`: leia o arquivo `install.js` desta skill e passe o conteúdo dele, **sem mudar nada**, como `code` de um `use_figma`. Ele devolve `{"v":"0.5.2","len":…}`; se devolver erro de cópia corrompida, leia o arquivo de novo e repita. Depois repita o catálogo. Isso acontece uma vez por arquivo.
+   `const s=figma.root.getSharedPluginData('lite','lib');if(!s)return'LITE_NOT_INSTALLED';const L=new Function(s+';return L')()(figma);if(L.v!=='0.5.3')return'LITE_OUTDATED '+L.v;return await L.catalog({filter:'FILTRO'})`
+   - `LITE_NOT_INSTALLED` ou `LITE_OUTDATED`: leia o arquivo `install.js` desta skill e passe o conteúdo dele, **sem mudar nada**, como `code` de um `use_figma`. Ele devolve `{"v":"0.5.3","len":…}`; se devolver erro de cópia corrompida, leia o arquivo de novo e repita. Depois repita o catálogo. Isso acontece uma vez por arquivo.
 2. **Build:** o mesmo trecho trocando o final por `return await L.build(SPEC,PARENT)`. SPEC é a tela inteira (formato abaixo). PARENT é `null` pra nova tela, ou o id de um nó pra inserir dentro dele.
 3. **Resposta** em até 5 linhas: o que foi criado, id do nó raiz e os avisos (`warn`) que importam. Não tire print: o get_screenshot não devolve imagem aqui.
 

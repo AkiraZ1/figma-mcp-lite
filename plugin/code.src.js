@@ -8,6 +8,11 @@
 figma.showUI(__html__, { visible: false });
 figma.ui.postMessage({ info: { file: figma.root.name } });
 
+// Botão "Conectar figma-mcp-lite" no painel da direita deste arquivo (aparece
+// sem nada selecionado): na próxima vez, abrir o arquivo e clicar. A Figma não
+// deixa plugin abrir sozinho junto com o arquivo. Em Dev Mode (só leitura) não grava.
+try { figma.root.setRelaunchData({ open: 'Liga a ponte do figma-mcp-lite com o Claude neste arquivo' }); } catch (e) { /* sem permissão de edição */ }
+
 let note = null;
 let lastState = '';
 function showState(state) {

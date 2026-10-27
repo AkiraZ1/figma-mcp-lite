@@ -9,6 +9,11 @@
 figma.showUI(__html__, { visible: false });
 figma.ui.postMessage({ info: { file: figma.root.name } });
 
+// Botão "Conectar figma-mcp-lite" no painel da direita deste arquivo (aparece
+// sem nada selecionado): na próxima vez, abrir o arquivo e clicar. A Figma não
+// deixa plugin abrir sozinho junto com o arquivo. Em Dev Mode (só leitura) não grava.
+try { figma.root.setRelaunchData({ open: 'Liga a ponte do figma-mcp-lite com o Claude neste arquivo' }); } catch (e) { /* sem permissão de edição */ }
+
 let note = null;
 let lastState = '';
 function showState(state) {
@@ -72,7 +77,7 @@ const LITE = (function (figma) {
 // setPluginData, loadAllPagesAsync nem fetch; sem crase nem "${" no fonte
 // (a instalação embrulha o código minificado em String.raw).
 
-var V = '0.5.2';
+var V = '0.5.3';
 var NS = 'lite';
 // Sem barra invertida no fonte: a instalação remota é copiada pelo modelo,
 // e barras são o que ele mais erra ao escapar. Daí o NL e nada de regex com \.

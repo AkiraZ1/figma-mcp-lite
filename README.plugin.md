@@ -23,6 +23,7 @@ Monta telas no Figma gastando **~10× menos token** que o fluxo nativo da Figma 
    ```
 2. Instala o plugin **figma-mcp-lite** no Figma Desktop pela Community: https://www.figma.com/community/plugin/1696575160680183036 (se ele não estiver aberto, o agente te lembra com esse link). Pra desenvolver, importa o manifest de `plugin-dev/` (id próprio de desenvolvimento, separado do plugin publicado): Figma Desktop → Plugins → Development → Import plugin from manifest.
 3. No Figma Desktop, abre o arquivo e roda **Plugins → figma-mcp-lite**. Ele fica em segundo plano, só com um aviso no rodapé ("conectado, rodando em segundo plano"), e tem um botão **Parar**.
+   - **Da próxima vez:** abre o arquivo e clica em **Conectar figma-mcp-lite** no painel da direita (com nada selecionado), ou usa o atalho do último plugin: **⌘⌥P** no Mac, **Ctrl+Alt+P** no Windows. A Figma não deixa plugin abrir sozinho junto com o arquivo.
 
 **Requer Node.js 20 ou mais novo instalado no computador.** O Claude Desktop e o instalador nativo do Claude Code não trazem Node. No macOS, prefira o instalador de https://nodejs.org: ele coloca o `node` em `/usr/local/bin`, que o app enxerga mesmo aberto pelo Finder. Funciona em macOS, Windows e Linux. No Windows, o instalador do nodejs.org já põe o Node no PATH. Se o Claude não achar o Node (instalado por nvm, por exemplo), troque `"node"` pelo caminho completo no `.mcp.json` do plugin.
 

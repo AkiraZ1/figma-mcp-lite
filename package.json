@@ -1,6 +1,6 @@
 {
   "name": "figma-mcp-lite",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "MCP enxuto pro Figma: plugin local + subagente obrigat\u00f3rio, feito pra gastar pouco token",
   "type": "module",
   "bin": {
