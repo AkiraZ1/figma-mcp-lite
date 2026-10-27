@@ -69,8 +69,8 @@ write('hooks/hooks.json', JSON.stringify({ hooks: {
   // Diz ao Claude, no começo de toda sessão, que o lite substitui o fluxo nativo.
   SessionStart: [{ hooks: [{ type: 'command', command: '"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"' }] }],
   PreToolUse: [{
-  // Sem o nome do plugin fixo: forks e cópias locais funcionam sem editar o hook.
-  matcher: 'mcp__plugin_[^_]+_lite__.*',
+  // Sem o nome do plugin fixo (forks) e cobrindo o prefixo do Cowork (remote-devices).
+  matcher: 'mcp__(remote-devices__)?plugin_[^_]+_lite__.*',
   hooks: [{ type: 'command', command: '"${CLAUDE_PLUGIN_ROOT}/hooks/only-subagent.sh"' }],
 }] } }, null, 2) + '\n');
 
@@ -84,12 +84,14 @@ copy('dist/install.js', 'skills/figma-lite/install.js');
 copy('skills/ativar/SKILL.md', 'skills/ativar/SKILL.md');
 
 const PLUGIN = 'figma-mcp-lite'; // forks: troque aqui e em plugin.json/marketplace.json
-const TOOLS = ['figma_ds', 'figma_lite_install', 'figma_status', 'figma_build', 'figma_edit', 'figma_tree', 'figma_shot'];
+const TOOLS = ['figma_ds', 'figma_lite_install', 'figma_status', 'figma_build', 'figma_edit', 'figma_variant', 'figma_link', 'figma_tree', 'figma_shot', 'figma_inspect', 'figma_component', 'figma_help'];
+// No Cowork as ferramentas do plugin chegam com o prefixo remote-devices.
+const PREFIXES = [`mcp__plugin_${PLUGIN}_lite__`, `mcp__remote-devices__plugin_${PLUGIN}_lite__`];
 write('agents/figma-lite.md', `---
 name: figma-lite
 description: Use para QUALQUER tarefa no Figma (criar ou editar tela, componente, layout, ler o design system de um arquivo). Substitui o conector e as skills nativas da Figma, que não devem ser sugeridos. É o único caminho pro Figma: a conversa principal não pode usar as ferramentas do figma-mcp-lite. Passe o pedido completo (tela, conteúdo, estados e o link do arquivo) numa mensagem só.
 model: sonnet
-tools: mcp__claude_ai_Figma__use_figma, mcp__claude_ai_Figma__search_design_system, ${TOOLS.map((t) => `mcp__plugin_${PLUGIN}_lite__${t}`).join(', ')}, Read
+tools: mcp__claude_ai_Figma__use_figma, mcp__claude_ai_Figma__search_design_system, ${PREFIXES.flatMap((p) => TOOLS.map((t) => p + t)).join(', ')}, Read
 ---
 
 ${prompt}`);

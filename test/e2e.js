@@ -23,7 +23,7 @@ function fakePlugin(file = 'Arquivo Teste') {
   ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     const result = m.cmd === 'status' ? { file, page: 'P1', selection: [] }
-      : m.cmd === 'edit' ? { id: m.args.id, patched: Object.keys(m.args.patch).join(',') }
+      : m.cmd === 'edit' ? { edited: m.args.items.length, patched: Object.keys(m.args.items[0].patch).join(',') }
       : m.cmd === 'build' ? { id: '1:2', nodes: 3 } : null;
     ws.send(JSON.stringify({ id: m.id, ok: true, result }));
   });
@@ -50,7 +50,7 @@ await check('status pelo hub', async () => {
 
 await check('ferramentas e instruções enxutas', async () => {
   const { tools } = await a.listTools();
-  assert.equal(tools.length, 7);
+  assert.equal(tools.length, 12);
   const size = JSON.stringify(tools).length + a.getInstructions().length;
   console.log(`   (schemas + instruções ≈ ${Math.round(size / 4)} tokens)`);
   assert.ok(size < 8000);

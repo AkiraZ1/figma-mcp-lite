@@ -12,7 +12,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "mcp__plugin_[^_]+_lite__.*",
+        "matcher": "mcp__(remote-devices__)?plugin_[^_]+_lite__.*",
         "hooks": [
           {
             "type": "command",

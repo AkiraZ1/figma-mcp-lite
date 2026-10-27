@@ -14,6 +14,9 @@
       state('conectado, rodando em segundo plano');
       ws.send(JSON.stringify({ hello: 'plugin', info }));
     };
+    // Keep-alive: um ping a cada 20s mantém a conexão (e o plugin) ativos.
+    clearInterval(window.__ping);
+    window.__ping = setInterval(() => { if (ws && ws.readyState === 1) ws.send('{"ping":1}'); }, 20000);
     ws.onmessage = (e) => parent.postMessage({ pluginMessage: JSON.parse(e.data) }, '*');
     ws.onclose = () => { state('aguardando o agente'); setTimeout(connect, 2000); };
     ws.onerror = () => {};

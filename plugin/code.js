@@ -35,7 +35,7 @@ figma.ui.onmessage = async function (msg) {
     const handler = HANDLERS[msg.cmd];
     if (!handler) throw new Error('comando desconhecido: ' + msg.cmd);
     // Dev Mode (arquivo só de visualização) é leitura: status, ds, tree, shot, docs.
-    if (figma.editorType === 'dev' && (msg.cmd === 'build' || msg.cmd === 'edit')) {
+    if (figma.editorType === 'dev' && ['build', 'edit', 'component', 'variant', 'link'].indexOf(msg.cmd) >= 0) {
       throw new Error('Dev Mode é só leitura: ' + msg.cmd + ' precisa de um arquivo com edição aberto no modo Design');
     }
     res = { id: msg.id, ok: true, result: await handler(msg.args || {}) };
@@ -77,7 +77,7 @@ const LITE = (function (figma) {
 // setPluginData, loadAllPagesAsync nem fetch; sem crase nem "${" no fonte
 // (a instalação embrulha o código minificado em String.raw).
 
-var V = '0.5.3';
+var V = '0.6.0';
 var NS = 'lite';
 // Sem barra invertida no fonte: a instalação remota é copiada pelo modelo,
 // e barras são o que ele mais erra ao escapar. Daí o NL e nada de regex com \.
@@ -426,11 +426,33 @@ Builder.prototype.common = async function (node, s) {
     if (st) await node.setEffectStyleIdAsync(st.id); else this.w('efeito não achado: ' + s.effect);
   }
   if (s.clip !== undefined && 'clipsContent' in node) node.clipsContent = !!s.clip;
+  // Imagem: o servidor lê o arquivo/URL e manda os bytes em img64 (só no modo
+  // plugin; no remoto não há como os bytes chegarem).
+  if (s.img !== undefined) {
+    if (s.img64) {
+      var image = figma.createImage(figma.base64Decode(s.img64));
+      var fit = String(s.fit || 'fill').toUpperCase();
+      node.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode: fit === 'FIT' || fit === 'CROP' || fit === 'TILE' ? fit : 'FILL' }];
+    } else this.w('imagem não carregada (' + (s.imgErr || 'só funciona no modo plugin') + '): ' + String(s.img).slice(0, 60));
+  }
+  // Draw: pincel (stretch/scatter) ou traço dinâmico sobre o stroke.
+  if ((s.brush || s.dynamic) && 'complexStrokeProperties' in node) {
+    try {
+      if (s.dynamic) node.complexStrokeProperties = { type: 'DYNAMIC', frequency: s.dynamic.frequency || 1, wiggle: s.dynamic.wiggle || 1, smoothen: s.dynamic.smoothen === undefined ? 0.5 : s.dynamic.smoothen };
+      else {
+        var bname = String(s.brush.name || s.brush).toUpperCase();
+        var scatter = ['BUBBLEGUM', 'WITCH_HOUSE', 'SHOEGAZE', 'HONKY_TONK', 'SCREAMO', 'DRONE', 'DOO_WOP', 'SPOKEN_WORD', 'VAPORWAVE', 'OI'].indexOf(bname) >= 0;
+        node.complexStrokeProperties = scatter
+          ? { type: 'BRUSH', brushType: 'SCATTER', brushName: bname, gap: s.brush.gap || 1, wiggle: s.brush.wiggle || 0, sizeJitter: s.brush.sizeJitter || 0, angularJitter: s.brush.angularJitter || 0, rotation: s.brush.rotation || 0 }
+          : { type: 'BRUSH', brushType: 'STRETCH', brushName: bname, direction: s.brush.direction || 'FORWARD' };
+      }
+    } catch (e) { this.w('pincel/traço: ' + ((e && e.message) || e)); }
+  }
 };
 
 // Tamanho depois de o nó estar no pai: FILL/HUG só valem dentro de auto layout.
 // Número fixo ou "$token" (ex.: h:"$border/minimal" num divisor).
-Builder.prototype.size = async function (node, s, parent) {
+Builder.prototype.size = async function (node, s, parent, isNew) {
   var self = this;
   var auto = parent && parent.layoutMode && parent.layoutMode !== 'NONE';
   var ax = async function (val, dim) {
@@ -451,6 +473,12 @@ Builder.prototype.size = async function (node, s, parent) {
   };
   await ax(s.w, 'w');
   await ax(s.h, 'h');
+  // Texto sem largura dentro de coluna (auto layout V) de largura fixa ocupa a
+  // largura e quebra linha, em vez de estourar numa linha só.
+  if (isNew && node.type === 'TEXT' && s.w === undefined && !s.abs && parent && parent.layoutMode === 'VERTICAL' && parent.layoutSizingHorizontal !== 'HUG') {
+    node.layoutSizingHorizontal = 'FILL';
+    node.textAutoResize = 'HEIGHT';
+  }
   if (s.abs && auto) node.layoutPositioning = 'ABSOLUTE';
   if (s.x !== undefined) node.x = s.x;
   if (s.y !== undefined) node.y = s.y;
@@ -587,20 +615,153 @@ Builder.prototype.inst = async function (s) {
   return node;
 };
 
+// Ícone SVG: pinta todos os vetores com a cor pedida (aceita "$variável").
+Builder.prototype.recolor = async function (node, color) {
+  var p = await this.paint(color);
+  if (!p) return;
+  var all = [node].concat('findAll' in node ? node.findAll(function () { return true; }) : []);
+  all.forEach(function (n) {
+    if (n.type === 'FRAME' || n.type === 'GROUP') return;
+    if (Array.isArray(n.fills) && n.fills.length) n.fills = [p];
+    if (Array.isArray(n.strokes) && n.strokes.length) n.strokes = [p];
+  });
+};
+
+// Animação (Figma Motion; liberado por conta). a = { style, dur, delay, props }
+// pra estilo pronto da Figma, ou { keys: { OPACITY: [[t, v], [t, v, ease]] },
+// ease, delay } pra keyframes; total = duração da timeline do frame.
+Builder.prototype.anim = async function (node, a) {
+  if (!a) return;
+  try {
+    var delay = a.delay || 0;
+    if (a.style) {
+      var want = String(a.style).toLowerCase();
+      var styles = figma.motion.figmaAnimationStyles();
+      var st = styles.filter(function (x) { return String(x.name).toLowerCase() === want; })[0];
+      if (!st) this.w('estilo de animação "' + a.style + '" não existe; disponíveis: ' + styles.map(function (x) { return x.name; }).join(', '));
+      else {
+        var cfg = { timelineOffset: delay };
+        if (a.dur !== undefined) cfg.duration = a.dur;
+        if (a.props) cfg.props = a.props;
+        node.applyAnimationStyle(st.styleId, cfg);
+      }
+    }
+    if (a.keys) {
+      Object.keys(a.keys).forEach(function (k) {
+        node.applyManualKeyframeTrack({ type: 'PROPERTY', name: k.toUpperCase() }, {
+          keyframes: a.keys[k].map(function (pt, i) {
+            var kf = { timelinePosition: pt[0] + delay, value: { type: 'FLOAT', value: pt[1] } };
+            if (i) kf.easing = { type: String(pt[2] || a.ease || 'EASE_OUT').toUpperCase() };
+            return kf;
+          }),
+        });
+      });
+    }
+    if (a.total && node.timelines && node.timelines[0]) node.setTimelineDuration(node.timelines[0].id, a.total);
+  } catch (e) {
+    var m = String((e && e.message) || e);
+    this.w(m.indexOf('not a supported API') >= 0 ? 'animação: o Motion da Figma não está liberado nesta conta' : 'animação: ' + m);
+  }
+};
+
+// Partículas (estrelas etc.): N elipses em posições determinísticas — mesmo
+// seed = mesmas posições em todas as telas (bom pro Smart Animate); shift
+// desloca x com volta, pra parallax.
+function rng(seed) {
+  var a = seed | 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+Builder.prototype.scatter = async function (s, parent) {
+  var box = figma.createFrame();
+  box.name = s.n || s.scatter;
+  box.fills = [];
+  box.clipsContent = false;
+  var area = s.area || [parent ? parent.width : 400, parent ? parent.height : 400];
+  box.resize(area[0], area[1]);
+  var r = rng(s.seed === undefined ? 1 : s.seed);
+  var lerp = function (v, t) { return Array.isArray(v) ? v[0] + (v[1] - v[0]) * t : v; };
+  var paint = await this.paint(s.fill === undefined ? '#FFFFFF' : s.fill);
+  var item = s.item || String(s.scatter).replace(/s$/, '');
+  var shift = s.shift || 0;
+  for (var i = 0; i < (s.count || 50); i++) {
+    var x = r() * area[0], y = r() * area[1], d = lerp(s.size === undefined ? [1, 3] : s.size, r()), o = lerp(s.o === undefined ? 1 : s.o, r());
+    var e = figma.createEllipse();
+    e.name = item + ' ' + (i + 1);
+    e.resize(d, d);
+    e.x = (((x + shift) % area[0]) + area[0]) % area[0];
+    e.y = y;
+    e.opacity = o;
+    e.fills = paint ? [paint] : [];
+    box.appendChild(e);
+    this.count++;
+  }
+  return box;
+};
+
 Builder.prototype.node = async function (s, parent) {
   var n = null;
+  // d = diâmetro/lado: atalho pra w e h iguais.
+  if (s.d !== undefined) { var sd = {}; Object.keys(s).forEach(function (k) { sd[k] = s[k]; }); if (sd.w === undefined) sd.w = s.d; if (sd.h === undefined) sd.h = s.d; s = sd; }
+  if (s.scatter !== undefined) {
+    n = await this.scatter(s, parent);
+    this.count++;
+    if (parent) parent.appendChild(n);
+    if (parent && parent.layoutMode && parent.layoutMode !== 'NONE') n.layoutPositioning = 'ABSOLUTE';
+    n.x = s.x || 0;
+    n.y = s.y || 0;
+    return n;
+  }
   if (s.frame !== undefined) n = await this.frame(s);
   else if (s.text !== undefined) n = await this.text(s);
   else if (s.inst !== undefined) n = await this.inst(s);
-  else if (s.rect !== undefined) { n = figma.createRectangle(); n.name = s.rect; n.fills = []; await this.common(n, s); }
+  else if (s.rect !== undefined) { n = figma.createRectangle(); n.name = s.n || s.rect || 'Retângulo'; n.fills = []; await this.common(n, s); }
+  else if (s.ellipse !== undefined) { n = figma.createEllipse(); n.name = s.n || s.ellipse || 'Elipse'; n.fills = []; await this.common(n, s); }
+  else if (s.svg !== undefined) {
+    n = figma.createNodeFromSvg(String(s.svg));
+    n.name = s.n || 'Ícone';
+    if (s.color) await this.recolor(n, s.color);
+    var sv = {};
+    Object.keys(s).forEach(function (k) { if (k !== 'fill') sv[k] = s[k]; });
+    await this.common(n, sv);
+  }
+  else if (s.path !== undefined) {
+    n = figma.createVector();
+    n.vectorPaths = [{ windingRule: 'NONZERO', data: String(s.path) }];
+    n.name = s.n || 'Desenho';
+    n.fills = [];
+    await this.common(n, s);
+    if (s.onPath !== undefined) {
+      // Texto em caminho: troca o vetor por um TextPathNode com o texto.
+      var tf = { family: s.font || 'Inter', style: WEIGHT[s.weight] || 'Regular' };
+      await figma.loadFontAsync(tf);
+      n = figma.createTextPath(n, 0, 0);
+      n.fontName = tf;
+      if (s.size) n.fontSize = s.size;
+      n.characters = String(s.onPath);
+      if (s.color) { var tp = await this.paint(s.color); if (tp) n.fills = [tp]; }
+    }
+  }
   else if (s.clone !== undefined) { var src = await figma.getNodeByIdAsync(s.clone); if (src) n = src.clone(); else this.w('clone: nó não achado ' + s.clone); }
   else { this.w('nó sem tipo: ' + JSON.stringify(s).slice(0, 60)); return null; }
   if (!n) return null;
+  if (s.n) n.name = s.n; // "n" sempre manda no nome da camada
   this.count++;
   if (parent) parent.appendChild(n);
-  await this.size(n, s, parent);
+  await this.size(n, s, parent, true);
+  if (s.anim) await this.anim(n, s.anim);
   if (s.children && 'appendChild' in n) {
-    for (var i = 0; i < s.children.length; i++) await this.node(s.children[i], n);
+    // "def": props padrão pros filhos diretos (o filho sobrescreve).
+    for (var i = 0; i < s.children.length; i++) {
+      var c = s.children[i];
+      if (s.def) { var m = {}; Object.keys(s.def).forEach(function (k) { m[k] = s.def[k]; }); Object.keys(c).forEach(function (k) { m[k] = c[k]; }); c = m; }
+      await this.node(c, n);
+    }
   }
   return n;
 };
@@ -632,15 +793,30 @@ async function build(spec, parentId) {
   return out;
 }
 
+// ─── achar nós: id ("12:34") ou caminho por nome a partir da página ─────────
+// "Universo 2/Conteudo/*": cada trecho é o nome de um filho; "*" pega todos.
+async function find(ref, from) {
+  ref = String(ref);
+  if (/^[0-9]+:[0-9]+$/.test(ref)) { var byId = await figma.getNodeByIdAsync(ref); return byId ? [byId] : []; }
+  var level = from ? [from] : null;
+  var segs = ref.split('/');
+  for (var i = 0; i < segs.length; i++) {
+    var next = [];
+    var pool = level ? [] : figma.currentPage.children.slice();
+    if (level) level.forEach(function (n) { if ('children' in n) pool = pool.concat(n.children); });
+    pool.forEach(function (c) { if (segs[i] === '*' || c.name === segs[i]) next.push(c); });
+    level = next;
+  }
+  return level || [];
+}
+
 // Correção pontual sem código arbitrário: aplica num nó existente os mesmos
 // campos da spec. patch: { n, text, type, color, fill, stroke, sw, r, o, w, h,
-// gap, pad, align, cross, layout, x, y, parent (id: move pra dentro), index,
-// remove: true }.
-async function edit(id, patch) {
-  var b = new Builder();
-  var node = await figma.getNodeByIdAsync(id);
-  if (!node) throw new Error('nó não encontrado: ' + id);
-  if (patch.remove) { node.remove(); return { v: V, id: id, removed: true }; }
+// d, gap, pad, align, cross, layout, x, y, img, brush, dynamic, anim,
+// parent (id: move pra dentro), index, remove: true }.
+async function editNode(b, node, patch) {
+  if (patch.d !== undefined) { if (patch.w === undefined) patch.w = patch.d; if (patch.h === undefined) patch.h = patch.d; }
+  if (patch.remove) { node.remove(); return; }
   if (patch.n) node.name = patch.n;
   if (node.type === 'TEXT') {
     if (patch.type) await b.typeRole(node, patch);
@@ -663,7 +839,7 @@ async function edit(id, patch) {
     if (patch.cross) node.counterAxisAlignItems = ALIGN[patch.cross] || 'MIN';
   }
   var common = {};
-  ['fill', 'stroke', 'sw', 'r', 'o', 'effect', 'clip'].forEach(function (k) { if (patch[k] !== undefined) common[k] = patch[k]; });
+  ['fill', 'stroke', 'sw', 'r', 'o', 'effect', 'clip', 'img', 'img64', 'imgErr', 'fit', 'brush', 'dynamic'].forEach(function (k) { if (patch[k] !== undefined) common[k] = patch[k]; });
   if (common.sw !== undefined && common.stroke === undefined) await b.num(node, 'strokeWeight', common.sw);
   await b.common(node, common);
   if (patch.parent) {
@@ -672,12 +848,191 @@ async function edit(id, patch) {
     if (patch.index !== undefined) dest.insertChild(patch.index, node); else dest.appendChild(node);
   }
   await b.size(node, patch, node.parent);
-  var out = { v: V, id: node.id, size: Math.round(node.width) + 'x' + Math.round(node.height), x: Math.round(node.x), y: Math.round(node.y) };
+  if (patch.anim) await b.anim(node, patch.anim);
+}
+
+// edit(ref, patch) ou edit([{id|path, patch}, …]) — em lote numa chamada só.
+async function edit(ref, patch) {
+  var b = new Builder();
+  var items = Array.isArray(ref) ? ref : [{ id: ref, patch: patch }];
+  var done = 0;
+  var last = null;
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var nodes = await find(it.id || it.path);
+    if (!nodes.length) { b.w('não achado: ' + (it.id || it.path)); continue; }
+    for (var j = 0; j < nodes.length; j++) {
+      var pt = {};
+      Object.keys(it.patch || {}).forEach(function (k) { pt[k] = it.patch[k]; });
+      await editNode(b, nodes[j], pt);
+      done++;
+      last = nodes[j];
+    }
+  }
+  var out = { v: V, edited: done };
+  if (last && !last.removed && items.length === 1 && done === 1) {
+    try { out.id = last.id; out.size = Math.round(last.width) + 'x' + Math.round(last.height); out.x = Math.round(last.x); out.y = Math.round(last.y); } catch (e) { /* removido */ }
+  }
   if (b.warn.length) out.warn = b.warn;
   return out;
 }
 
-return { v: V, build: build, edit: edit, catalog: catalog, reindex: reindex };
+// Tela nova a partir de outra: clona e aplica patches por nome de camada
+// ("Sol", ou caminho relativo "Conteudo/Titulo"; vale pra todas as camadas
+// com esse nome). Troca uma spec inteira por poucos patches.
+async function variant(srcRef, o) {
+  o = o || {};
+  var b = new Builder();
+  var src = (await find(srcRef))[0];
+  if (!src) throw new Error('tela de origem não achada: ' + srcRef);
+  var copy = src.clone();
+  if (o.name) copy.name = o.name;
+  if (o.x === undefined && copy.parent && copy.parent.type === 'PAGE') {
+    var right = 0;
+    copy.parent.children.forEach(function (c) { if (c !== copy) right = Math.max(right, c.x + c.width); });
+    copy.x = right + 120;
+    copy.y = src.y;
+  } else if (o.x !== undefined) { copy.x = o.x; copy.y = o.y === undefined ? src.y : o.y; }
+  var patches = o.patches || {};
+  var done = 0;
+  var keys = Object.keys(patches);
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    var nodes = k.indexOf('/') >= 0 ? await find(k, copy) : copy.findAll(function (n) { return n.name === k; });
+    if (!nodes.length) { b.w('camada não achada: ' + k); continue; }
+    for (var j = 0; j < nodes.length; j++) {
+      var pt = {};
+      Object.keys(patches[k]).forEach(function (x) { pt[x] = patches[k][x]; });
+      await editNode(b, nodes[j], pt);
+      done++;
+    }
+  }
+  var out = { v: V, id: copy.id, name: copy.name, patched: done, x: Math.round(copy.x), y: Math.round(copy.y) };
+  if (b.warn.length) out.warn = b.warn;
+  return out;
+}
+
+// Protótipo: liga telas/nós. l = { from, to, trigger: "click"|"hover"|"delay",
+// ms, animation: "smart"|"dissolve"|"instant", easing, duration (s) } ou array.
+var TRIGGER = { click: 'ON_CLICK', hover: 'ON_HOVER', press: 'ON_PRESS', drag: 'ON_DRAG' };
+var TRANSITION = { smart: 'SMART_ANIMATE', dissolve: 'DISSOLVE', move: 'MOVE_IN', push: 'PUSH', slide: 'SLIDE_IN' };
+async function link(list) {
+  list = Array.isArray(list) ? list : [list];
+  var b = new Builder();
+  var done = 0;
+  for (var i = 0; i < list.length; i++) {
+    var l = list[i];
+    var from = (await find(l.from))[0];
+    var to = (await find(l.to))[0];
+    if (!from || !to) { b.w('link: não achado ' + (!from ? l.from : l.to)); continue; }
+    var trig = String(l.trigger || 'click').toLowerCase();
+    var trigger = trig === 'delay' ? { type: 'AFTER_TIMEOUT', timeout: l.ms === undefined ? 800 : l.ms } : { type: TRIGGER[trig] || 'ON_CLICK' };
+    var anim = String(l.animation || 'smart').toLowerCase();
+    var transition = anim === 'instant' ? null : { type: TRANSITION[anim] || 'SMART_ANIMATE', easing: { type: String(l.easing || 'EASE_OUT').toUpperCase() }, duration: l.duration === undefined ? 0.4 : l.duration };
+    if (transition && transition.type !== 'SMART_ANIMATE' && transition.type !== 'DISSOLVE') { transition.direction = String(l.direction || 'LEFT').toUpperCase(); transition.matchLayers = false; }
+    var keep = (from.reactions || []).filter(function (r) { return !r.trigger || r.trigger.type !== trigger.type; });
+    await from.setReactionsAsync(keep.concat([{ trigger: trigger, actions: [{ type: 'NODE', destinationId: to.id, navigation: 'NAVIGATE', transition: transition, resetScrollPosition: true }] }]));
+    done++;
+  }
+  var out = { v: V, linked: done };
+  if (b.warn.length) out.warn = b.warn;
+  return out;
+}
+
+// ─── inspect: o frame em texto pra virar código ─────────────────────────────
+// Uma linha por nó: tipo, nome, tamanho, posição, layout e cada valor com o
+// NOME da variável quando ligado (é o que o código deve usar).
+async function inspect(id, depth) {
+  var root = await figma.getNodeByIdAsync(id);
+  if (!root) throw new Error('nó não encontrado: ' + id);
+  var names = {};
+  var vn = async function (alias) {
+    if (!alias || !alias.id) return null;
+    if (!names[alias.id]) { var v = await figma.variables.getVariableByIdAsync(alias.id); names[alias.id] = v ? '$' + v.name : '?'; }
+    return names[alias.id];
+  };
+  var paintStr = async function (ps) {
+    if (!Array.isArray(ps) || !ps.length) return null;
+    var p = ps[0];
+    if (p.boundVariables && p.boundVariables.color) return await vn(p.boundVariables.color);
+    if (p.type === 'SOLID') return rgbToHex({ r: p.color.r, g: p.color.g, b: p.color.b, a: p.opacity === undefined ? 1 : p.opacity });
+    return p.type.toLowerCase();
+  };
+  var num = async function (n, field, alias) {
+    var b = n.boundVariables && n.boundVariables[alias || field];
+    var name = b ? await vn(Array.isArray(b) ? b[0] : b) : null;
+    var v = n[field];
+    if (v === undefined || v === figma.mixed) return null;
+    return name ? name + '(' + Math.round(v * 100) / 100 + ')' : String(Math.round(v * 100) / 100);
+  };
+  var lines = [];
+  var max = 150;
+  var walk = async function (n, d) {
+    if (lines.length >= max) return;
+    var parts = ['  '.repeat(d) + n.type + ' "' + n.name + '"'];
+    if ('width' in n) parts.push(Math.round(n.width) + 'x' + Math.round(n.height) + ' @' + Math.round(n.x) + ',' + Math.round(n.y));
+    if (n.layoutMode && n.layoutMode !== 'NONE') {
+      parts.push(n.layoutMode === 'HORIZONTAL' ? 'row' : 'col');
+      var g = await num(n, 'itemSpacing'); if (g && g !== '0') parts.push('gap=' + g);
+      var pads = [await num(n, 'paddingTop'), await num(n, 'paddingRight'), await num(n, 'paddingBottom'), await num(n, 'paddingLeft')];
+      if (pads.some(function (x) { return x && x !== '0'; })) parts.push('pad=' + pads.join(' '));
+      parts.push('align=' + n.primaryAxisAlignItems.toLowerCase() + '/' + n.counterAxisAlignItems.toLowerCase());
+    }
+    if ('layoutSizingHorizontal' in n) parts.push('sizing=' + n.layoutSizingHorizontal.toLowerCase() + '/' + n.layoutSizingVertical.toLowerCase());
+    var f = await paintStr(n.fills); if (f && n.type !== 'TEXT') parts.push('fill=' + f);
+    var st = await paintStr(n.strokes); if (st) parts.push('stroke=' + st + ' ' + (await num(n, 'strokeWeight')));
+    var r = await num(n, 'topLeftRadius'); if (r && r !== '0') parts.push('r=' + r);
+    if (n.opacity !== undefined && n.opacity < 1) parts.push('o=' + Math.round(n.opacity * 100) / 100);
+    if (n.type === 'TEXT') {
+      parts.push('«' + n.characters.slice(0, 80) + '»');
+      parts.push('color=' + (await paintStr(n.fills)));
+      var fs = await num(n, 'fontSize'); var lh = n.lineHeight && n.lineHeight.unit === 'PIXELS' ? Math.round(n.lineHeight.value) : 'auto';
+      var lhb = n.boundVariables && n.boundVariables.lineHeight ? await vn(n.boundVariables.lineHeight) + '(' + lh + ')' : lh;
+      var fn = n.fontName !== figma.mixed ? n.fontName.family + ' ' + n.fontName.style : 'misto';
+      parts.push('font=' + fn + ' size=' + fs + ' lh=' + lhb);
+    }
+    if (n.type === 'INSTANCE') {
+      var main = await n.getMainComponentAsync();
+      if (main) parts.push('inst=' + (main.parent && main.parent.type === 'COMPONENT_SET' ? main.parent.name : main.name));
+    }
+    lines.push(parts.join(' '));
+    if (d < depth && 'children' in n) for (var i = 0; i < n.children.length; i++) await walk(n.children[i], d + 1);
+    else if ('children' in n && n.children.length) lines[lines.length - 1] += ' (+' + n.children.length + ' filhos)';
+  };
+  await walk(root, 0);
+  if (lines.length >= max) lines.push('… cortado em ' + max + ' linhas');
+  return lines.join(NL);
+}
+
+// ─── componentes ────────────────────────────────────────────────────────────
+// o = { id } transforma o nó em componente; { ids, n } junta componentes (ou
+// frames, que viram componente antes) como variantes; props = { Nome:
+// "TEXT:valor" | "BOOLEAN:true" } cria propriedades no componente/set.
+async function component(o) {
+  var toComp = async function (id) {
+    var n = await figma.getNodeByIdAsync(id);
+    if (!n) throw new Error('nó não encontrado: ' + id);
+    return n.type === 'COMPONENT' || n.type === 'COMPONENT_SET' ? n : figma.createComponentFromNode(n);
+  };
+  var target;
+  if (o.ids && o.ids.length) {
+    var comps = [];
+    for (var i = 0; i < o.ids.length; i++) comps.push(await toComp(o.ids[i]));
+    target = figma.combineAsVariants(comps, comps[0].parent || figma.currentPage);
+  } else target = await toComp(o.id);
+  if (o.n) target.name = o.n;
+  var added = [];
+  if (o.props) Object.keys(o.props).forEach(function (k) {
+    var raw = String(o.props[k]);
+    var cut = raw.indexOf(':');
+    var type = (cut > 0 ? raw.slice(0, cut) : 'TEXT').toUpperCase();
+    var val = cut > 0 ? raw.slice(cut + 1) : raw;
+    added.push(target.addComponentProperty(k, type, type === 'BOOLEAN' ? val === 'true' : val));
+  });
+  return { v: V, id: target.id, type: target.type, ref: target.key, props: added };
+}
+
+return { v: V, build: build, edit: edit, variant: variant, link: link, catalog: catalog, reindex: reindex, inspect: inspect, component: component };
 
 })(figma);
 
@@ -701,7 +1056,7 @@ HANDLERS.tree = async function (a) {
   if (a.id) root = await nodeOrThrow(a.id);
   else root = figma.currentPage.selection[0] || figma.currentPage;
   const lines = [];
-  const max = a.max || 120;
+  const max = a.max || 40;
   (function walk(n, d) {
     if (lines.length >= max) return;
     let line = '  '.repeat(d) + n.type + ' ' + n.id + ' "' + n.name + '"';
@@ -719,7 +1074,11 @@ HANDLERS.tree = async function (a) {
 };
 
 // Correção pontual: operações estruturadas da lib (sem executar código recebido).
-HANDLERS.edit = async function (a) { return LITE.edit(a.id, a.patch || {}); };
+HANDLERS.edit = async function (a) { return LITE.edit(a.items || a.id || a.path, a.patch || {}); };
+HANDLERS.variant = async function (a) { return LITE.variant(a.source, a); };
+HANDLERS.link = async function (a) { return LITE.link(a.links || a); };
+HANDLERS.inspect = async function (a) { return LITE.inspect(a.id, a.depth === undefined ? 3 : a.depth); };
+HANDLERS.component = async function (a) { return LITE.component(a); };
 
 HANDLERS.shot = async function (a) {
   const n = await nodeOrThrow(a.id);

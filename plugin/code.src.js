@@ -34,7 +34,7 @@ figma.ui.onmessage = async function (msg) {
     const handler = HANDLERS[msg.cmd];
     if (!handler) throw new Error('comando desconhecido: ' + msg.cmd);
     // Dev Mode (arquivo só de visualização) é leitura: status, ds, tree, shot, docs.
-    if (figma.editorType === 'dev' && (msg.cmd === 'build' || msg.cmd === 'edit')) {
+    if (figma.editorType === 'dev' && ['build', 'edit', 'component', 'variant', 'link'].indexOf(msg.cmd) >= 0) {
       throw new Error('Dev Mode é só leitura: ' + msg.cmd + ' precisa de um arquivo com edição aberto no modo Design');
     }
     res = { id: msg.id, ok: true, result: await handler(msg.args || {}) };
@@ -91,7 +91,7 @@ HANDLERS.tree = async function (a) {
   if (a.id) root = await nodeOrThrow(a.id);
   else root = figma.currentPage.selection[0] || figma.currentPage;
   const lines = [];
-  const max = a.max || 120;
+  const max = a.max || 40;
   (function walk(n, d) {
     if (lines.length >= max) return;
     let line = '  '.repeat(d) + n.type + ' ' + n.id + ' "' + n.name + '"';
@@ -109,7 +109,11 @@ HANDLERS.tree = async function (a) {
 };
 
 // Correção pontual: operações estruturadas da lib (sem executar código recebido).
-HANDLERS.edit = async function (a) { return LITE.edit(a.id, a.patch || {}); };
+HANDLERS.edit = async function (a) { return LITE.edit(a.items || a.id || a.path, a.patch || {}); };
+HANDLERS.variant = async function (a) { return LITE.variant(a.source, a); };
+HANDLERS.link = async function (a) { return LITE.link(a.links || a); };
+HANDLERS.inspect = async function (a) { return LITE.inspect(a.id, a.depth === undefined ? 3 : a.depth); };
+HANDLERS.component = async function (a) { return LITE.component(a); };
 
 HANDLERS.shot = async function (a) {
   const n = await nodeOrThrow(a.id);

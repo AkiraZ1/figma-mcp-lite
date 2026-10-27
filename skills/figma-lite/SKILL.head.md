@@ -5,6 +5,8 @@ description: Cria e edita telas, componentes e layouts no Figma pelo conector Fi
 
 # figma-lite (chat)
 
+Carregue esta skill **uma vez por conversa**; se ela já está no contexto, não leia de novo.
+
 Este fluxo substitui o fluxo nativo da Figma. **Não carregue figma-use, figma-generate-design nem outras skills de Figma, e não chame create_session, search_design_system (exceto no caso abaixo), get_design_context nem get_screenshot.** Gaste o mínimo de contexto: poucas chamadas e respostas curtas.
 
 - **Claude Code ou Cowork com o subagente `figma-lite` disponível:** não use esta skill. Delegue o pedido inteiro ao subagente.
@@ -19,5 +21,5 @@ fileKey vem da URL figma.com/design/<fileKey>/…
 2. **Build:** o mesmo trecho trocando o final por `return await L.build(SPEC,PARENT)`. SPEC é a tela inteira (formato abaixo). PARENT é `null` pra nova tela, ou o id de um nó pra inserir dentro dele.
 3. **Resposta** em até 5 linhas: o que foi criado, id do nó raiz e os avisos (`warn`) que importam. Não tire print: o get_screenshot não devolve imagem aqui.
 
-Correção, só se algo saiu errado: o mesmo trecho terminando em `return await L.edit(ID,PATCH)`. O patch usa os campos da spec (n, text, type, color, fill, stroke, sw, r, o, w, h, gap, pad, align, cross, layout; parent+index move; remove:true apaga). Nunca reconstrua a tela.
+Mesmo trecho, outros finais: `L.edit([{id|path,patch},…])` (ajustes em lote; path por nome, `*` = todos), `L.variant(ORIGEM,{name,patches:{"Camada":{…}}})` (telas que repetem estrutura: build da 1ª, as outras assim), `L.link([{from,to,trigger:"click"|"delay",ms,animation:"smart"}])` (protótipo), `L.inspect(ID,3)` (ler pra código), `L.component({id}|{ids,n,props})`. Nunca reconstrua a tela.
 

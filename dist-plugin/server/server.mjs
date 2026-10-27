@@ -14,7 +14,7 @@ import readline from 'node:readline';
 import { EventEmitter } from 'node:events';
 
 // Preenchido pelo scripts/build-plugin.js no pacote publicado.
-const BUILD = { version: "0.5.3", pluginUrl: "https://www.figma.com/community/plugin/1696575160680183036" };
+const BUILD = { version: "0.6.0", pluginUrl: "https://www.figma.com/community/plugin/1696575160680183036" };
 
 const PORT = Number(process.env.FIGMA_LITE_PORT) || 3055;
 const AGENT_PORT = PORT + 1;
@@ -158,6 +158,7 @@ function becomeHub() {
   const onMessage = (conn, raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
+    if (msg.ping) return; // keep-alive do plugin
     if (msg.hello === 'plugin') {
       plugins.delete(conn);
       plugins.set(conn, msg.info || {});
@@ -275,7 +276,23 @@ async function ensureConn() {
   return connecting;
 }
 
+// Plugin já respondeu nesta sessão e sumiu: em vez do texto longo de
+// instalação, só pede pra reabrir (rodar outro plugin no Figma fecha este).
+let pluginSeen = false;
+const REOPEN = 'O plugin do Figma fechou (rodar outro plugin no Figma fecha este). Reabra no arquivo: botão "Conectar figma-mcp-lite" no painel da direita, ou ⌘⌥P (Mac) / Ctrl+Alt+P (Windows), e repita.';
+
 async function call(cmd, args = {}, timeoutMs = 30000) {
+  try {
+    const r = await callRaw(cmd, args, timeoutMs);
+    pluginSeen = true;
+    return r;
+  } catch (e) {
+    if (pluginSeen && e.message === NO_PLUGIN) throw new Error(REOPEN);
+    throw e;
+  }
+}
+
+async function callRaw(cmd, args = {}, timeoutMs = 30000) {
   const ws = await ensureConn();
   const id = ++reqSeq;
   return new Promise((resolve, reject) => {
@@ -473,16 +490,76 @@ tool('figma_lite_install', 'Modo remoto: devolve o código JS pra colar no use_f
   async () => text(`Versão ${VERSION}. Cole a linha abaixo, sem mudar nada, como code de um use_figma. Ele devolve {"v":"${VERSION}","len":…}; se devolver erro de cópia corrompida, chame figma_lite_install de novo.\n` +
     fs.readFileSync(INSTALL_JS, 'utf8')));
 
+// ─── imagens: o servidor carrega, o plugin só recebe os bytes ───────────────
+// "img" num nó da spec/patch é um caminho local ou uma URL http(s) que o
+// usuário pediu; vira "img64" (base64) antes de ir pro plugin.
+const MAX_IMG = 4 * 1024 * 1024;
+async function loadImages(node) {
+  if (!node || typeof node !== 'object') return;
+  if (typeof node.img === 'string' && !node.img64) {
+    try {
+      let buf;
+      if (/^https?:[/][/]/i.test(node.img)) {
+        const res = await fetch(node.img, { signal: AbortSignal.timeout(15000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        buf = Buffer.from(await res.arrayBuffer());
+      } else {
+        const p = node.img.startsWith('~') ? path.join(os.homedir(), node.img.slice(1)) : node.img;
+        buf = fs.readFileSync(p);
+      }
+      if (buf.length > MAX_IMG) throw new Error('maior que 4 MB');
+      node.img64 = buf.toString('base64');
+    } catch (e) { node.imgErr = e.message; }
+  }
+  if (Array.isArray(node.children)) for (const c of node.children) await loadImages(c);
+}
+
+// Documentação sob demanda: cada tópico só entra no contexto quando o agente
+// precisa daquele recurso (o prompt fixo fica pequeno).
+const HELP = {
+  svg: `Ícone/ilustração SVG — nó na spec: {"svg":"<svg …>…</svg>","n":"Ícone busca","w":24,"h":24,"color":"$icon/neutral/primary"}. color pinta todos os vetores (aceita "$variável"). Prefira ícones simples (path único) e passe o SVG completo.`,
+  img: `Imagem (só no modo plugin) — campo em frame ou rect: {"rect":"Foto","w":"fill","h":200,"img":"/caminho/foto.png" | "https://…/foto.jpg","fit":"fill|fit|crop|tile","r":"$radius/…"}. PNG, JPG ou GIF até 4 MB e 4096 px. URL só se o usuário passou ou pediu. No remoto não funciona: use um rect com fill neutro e avise.`,
+  draw: `Desenho (Figma Draw) — vetor: {"path":"M0 0 C 40 -20 80 20 120 0","n":"Traço","stroke":"$border/brand/primary/bold","sw":4}. Pincel no stroke: "brush":"HEIST|BLOCKBUSTER|GRINDHOUSE|BIOPIC|SPAGHETTI_WESTERN|SLASHER|HARDBOILED|VERITE|EPIC|SCREWBALL|ROM_COM|NOIR|PROPAGANDA|MELODRAMA" (stretch) ou "BUBBLEGUM|WITCH_HOUSE|SHOEGAZE|HONKY_TONK|SCREAMO|DRONE|DOO_WOP|SPOKEN_WORD|VAPORWAVE|OI" (scatter; aceita {"name":…,"gap":1,"wiggle":0}). Traço à mão: "dynamic":{"frequency":2,"wiggle":3,"smoothen":0.5}. Texto em caminho: no mesmo nó path, "onPath":"texto", "size":16, "color":"$text/…". Também vale em figma_edit.`,
+  anim: `Animação (Figma Motion; precisa estar liberado na conta, senão volta aviso) — campo "anim" em qualquer nó do build ou no patch do figma_edit. Estilo pronto da Figma: {"anim":{"style":"<nome>","dur":0.4,"delay":0.1,"props":{…}}} (nomes: rode figma_edit num nó com {"anim":{"style":"?"}} e o aviso lista os disponíveis). Keyframes: {"anim":{"keys":{"OPACITY":[[0,0],[0.3,1]],"TRANSLATION_Y":[[0,24],[0.3,0,"EASE_OUT"]]},"ease":"EASE_OUT","delay":0}} — propriedades: OPACITY, TRANSLATION_X/Y, ROTATION, SCALE_X/Y/XY, WIDTH, HEIGHT, CORNER_RADIUS, STROKE_WEIGHT, STACK_SPACING; easing: EASE_IN, EASE_OUT, EASE_IN_AND_OUT, LINEAR, EASE_OUT_BACK, GENTLE, QUICK, BOUNCY, SLOW, HOLD. "total":1.2 define a duração da timeline do frame. Entrada em cascata: mesmo anim com delay crescente em cada filho.`,
+  component: `Componentes — figma_component: {"id":"1:2"} transforma o nó em componente; {"ids":["1:2","1:3"],"n":"Botão"} junta como variantes (nomeie as camadas antes no formato "Tipo=Primário, Tamanho=M" via figma_edit {"n":…}); "props":{"Rótulo":"TEXT:Comprar","Ícone":"BOOLEAN:true"} cria propriedades. Devolve id e ref (use a ref em "inst").`,
+  inspect: `Ler pra código — figma_inspect {"id":"1:2","depth":3}: uma linha por nó com tipo, nome, tamanho, posição, layout (row/col, gap, pad, align, sizing), fill/stroke/r e texto (conteúdo, fonte, size, lh), sempre com o NOME da variável quando ligado — use esses nomes como tokens no código.`,
+};
+
+tool('figma_help', 'Documentação de um recurso, só quando for usar: svg (ícones), img (imagens), draw (vetor, pincel, texto em caminho), anim (animação), component (componentes e variantes), inspect (ler pra código).',
+  { topic: str('svg | img | draw | anim | component | inspect') }, ['topic'],
+  async ({ topic }) => text(HELP[String(topic).toLowerCase()] || `tópicos: ${Object.keys(HELP).join(', ')}`));
+
+tool('figma_inspect', 'Lê um frame pra virar código: layout, tamanhos, cores e tipografia com o nome da variável de cada valor. Detalhes: figma_help inspect.',
+  { id: str('id do nó'), depth: num('profundidade, padrão 3') }, ['id'],
+  async ({ id, depth }) => text(await call('inspect', { id, depth }, 60000)));
+
+tool('figma_component', 'Transforma nó em componente, junta variantes e cria propriedades. Detalhes: figma_help component.',
+  { id: str(), ids: { type: 'array', items: { type: 'string' } }, n: str('nome'), props: { type: 'object' } }, [],
+  async (a) => text(JSON.stringify(await call('component', a, 60000))));
+
 tool('figma_build', 'Cria uma tela/bloco inteiro a partir de uma spec JSON numa chamada só (formato no prompt do agente). Retorna id do nó raiz e avisos.',
   { spec: { description: 'nó raiz da spec (objeto JSON)' }, parent: str('id do nó onde inserir; padrão: nova raiz na página') }, ['spec'],
   async ({ spec, parent }) => {
     const s = typeof spec === 'string' ? JSON.parse(spec) : spec;
+    await loadImages(s);
     return text(JSON.stringify(await call('build', { spec: s, parent }, 120000)));
   });
 
-tool('figma_edit', 'Correção pontual num nó existente, sem reconstruir: mesmos campos da spec (n, text, type, color, fill, stroke, sw, r, o, w, h, gap, pad, align, cross, layout), parent+index pra mover, remove:true pra apagar.',
-  { id: str('id do nó'), patch: { type: 'object', description: 'campos a mudar' } }, ['id', 'patch'],
-  async ({ id, patch }) => text(JSON.stringify(await call('edit', { id, patch: typeof patch === 'string' ? JSON.parse(patch) : patch }, 60000))));
+tool('figma_edit', 'Correção sem reconstruir. Um nó: id ou path ("Tela 2/Conteudo/*", nomes de camada, * = todos) + patch com os campos da spec (n, text, type, color, fill, stroke, sw, r, o, w, h, d, gap, pad, align, cross, layout, x, y, img, brush, dynamic, anim; parent+index move; remove:true apaga). Vários: items [{id|path, patch}] numa chamada só.',
+  { id: str(), path: str(), patch: { type: 'object' }, items: { type: 'array', items: { type: 'object' } } }, [],
+  async ({ id, path: p, patch, items }) => {
+    const list = items || [{ id, path: p, patch: typeof patch === 'string' ? JSON.parse(patch) : patch }];
+    for (const it of list) await loadImages(it.patch);
+    return text(JSON.stringify(await call('edit', { items: list }, 120000)));
+  });
+
+tool('figma_variant', 'Tela nova clonando outra e aplicando patches por nome de camada numa chamada só (telas que repetem estrutura, Smart Animate). patches: {"Sol":{"x":900},"Conteudo/Titulo":{"text":"…"}}.',
+  { source: str('id ou nome da tela de origem'), name: str('nome da nova tela'), patches: { type: 'object' }, x: num(), y: num() }, ['source'],
+  async (a) => text(JSON.stringify(await call('variant', a, 120000))));
+
+tool('figma_link', 'Protótipo: liga telas/nós. links: [{from, to, trigger:"click"|"hover"|"delay", ms, animation:"smart"|"dissolve"|"instant"|"push"|"slide", easing, duration (s)}]. from/to: id ou nome.',
+  { links: { type: 'array', items: { type: 'object' } } }, ['links'],
+  async ({ links }) => text(JSON.stringify(await call('link', { links }, 60000))));
 
 tool('figma_tree', 'Contorno compacto de um nó (tipo, id, nome, tamanho). Padrão: seleção ou página atual.',
   { id: str(), depth: num(), max_lines: num() }, [],

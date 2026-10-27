@@ -1,22 +1,11 @@
-## Design system — o que já está no arquivo primeiro
-- O catálogo lista, nesta ordem: variáveis do próprio arquivo, das bibliotecas habilitadas, estilos e componentes (locais e de biblioteca já usados no arquivo, com `ref`). **Use sempre o que está no catálogo.** Cada linha traz valor e a descrição de uso escrita pelo dono do DS: escolha pelo papel do elemento e por essa descrição, não pela aparência.
-- **Nada solto** quando há variáveis no DS: cor, espaçamento, raio, borda e tamanho são `"$nome/da/variável"`; texto usa `type` com o prefixo das linhas `type …:` do catálogo. Hex/px/fonte solta só se o usuário pedir ou o catálogo não tiver, e diga nos avisos.
-- Biblioteca **não habilitada** no arquivo, só se o usuário pedir ou faltar algo essencial, e só no remoto: `search_design_system` e use a referência devolvida (`"$#<ref>"` pra variável, a ref de 40 hex em `inst`). Não habilita a biblioteca, só importa o que usar.
-- Cor com significado (erro, sucesso) leva ícone ou texto junto.
+## Design system
+- Use o que o catálogo lista: variáveis do arquivo e das bibliotecas habilitadas, estilos e componentes (`ref`). Escolha pela descrição de uso de cada linha.
+- Nada solto: cor, espaçamento, raio, borda e tamanho como `"$nome/da/variável"`; texto com `type` (prefixo das linhas `type …:`). Valor solto só se faltar no catálogo, e avise.
+- Biblioteca não habilitada: só no remoto, via `search_design_system` (`"$#<ref>"` pra variável, ref de 40 hex em `inst`).
 
-## Spec
-Cada nó é um objeto; o tipo vem da chave:
-- `{"frame":"Nome", layout:"V"|"H"|"none" (padrão V), gap, pad: n | [v,h] | [t,r,b,l], align:"start|center|end|between", cross:"start|center|end", wrap:true, children:[...]}`
-- `{"text":"conteúdo", type:"<prefixo tipográfico do catálogo>" (+"/strong" pra ênfase) | style:"Nome do Text Style" | (size, weight, font), color, align:"left|center|right"}`
-- `{"inst":"Nome do componente" | ref de 40 hex, props:{"Size":"md","Label":"Comprar","Disabled":false}}`
-- `{"rect":"Nome"}` · `{"clone":"id-de-nó"}`
-
-Comuns: `w`/`h`: número | "fill" | "hug" | "$nome/da/variável"; `fill`, `stroke` (+`sw`): "#RRGGBB[AA]" | "$nome/da/variável" | "$#ref"; `r` raio; `o` opacidade; `effect`: nome do estilo de efeito; `clip`; `abs:true` + `x`,`y`; `n`: nome da camada. `gap`, `pad`, `r` e `sw` aceitam "$nome/da/variável". Nomes de props ignoram maiúsculas.
-
-Exemplo:
-{"frame":"Login","w":390,"fill":"$bg/neutral/default","pad":["$padding/2x-large","$padding/x-large"],"gap":"$gap/medium","children":[
- {"text":"Entrar","type":"text/heading/xl","color":"$text/neutral/primary"},
- {"frame":"Botão","layout":"H","w":"fill","h":48,"align":"center","cross":"center","fill":"$bg/brand/primary/bold","r":"$radius/round","children":[
-  {"text":"Continuar","type":"text/body/lg/strong","color":"$text/brand/primary/on-bold"}]}]}
-
-Não escreva código solto de Plugin API: build, edit e catalog cobrem tudo.
+## Spec (o tipo vem da chave)
+- `{"frame":"Nome", layout:"V"|"H"|"none", gap, pad: n|[v,h]|[t,r,b,l], align:"start|center|end|between", cross, wrap, def:{…props padrão dos filhos}, children:[…]}`
+- `{"text":"…", type:"<prefixo>"(+"/strong") | size+weight+font, color, align}` — em coluna de largura fixa já ocupa a largura e quebra linha.
+- `{"inst":"Nome"|ref, props:{…}}` · `{"rect":"Nome"}` · `{"ellipse":"Nome","d":70}` · `{"clone":"id"}`
+- `{"scatter":"Stars","count":70,"seed":7,"size":[1,3],"o":[0.3,1],"fill":"#FFF","shift":-30}`: N elipses "Star 1..N"; mesmo seed = mesmas posições (Smart Animate); shift = parallax.
+- Comuns: `w`/`h`: n|"fill"|"hug"|"$var"; `d` = w e h; `fill`/`stroke`(+`sw`): "#hex"|"$var"; `r`, `o`, `effect`, `clip`, `abs`+`x`,`y`, `n` (nome da camada; sempre vale).
