@@ -525,27 +525,44 @@ const HELP = {
   inspect: `Ler pra código — figma_inspect {"id":"1:2","depth":3}: uma linha por nó com tipo, nome, tamanho, posição, layout (row/col, gap, pad, align, sizing), fill/stroke/r e texto (conteúdo, fonte, size, lh), sempre com o NOME da variável quando ligado — use esses nomes como tokens no código.`,
 };
 
-tool('figma_help', 'Documentação de um recurso, só quando for usar: svg (ícones), img (imagens), draw (vetor, pincel, texto em caminho), anim (animação), component (componentes e variantes), inspect (ler pra código).',
-  { topic: str('svg | img | draw | anim | component | inspect') }, ['topic'],
-  async ({ topic }) => text(HELP[String(topic).toLowerCase()] || `tópicos: ${Object.keys(HELP).join(', ')}`));
+tool('figma_help', 'Documentação de um recurso, só quando for usar: svg (ícones), img (imagens), draw (vetor, pincel, texto em caminho), anim (animação), component (componentes e variantes), inspect (ler pra código). Vários de uma vez: "anim,draw".',
+  { topic: str('svg | img | draw | anim | component | inspect, ou vários separados por vírgula') }, ['topic'],
+  async ({ topic }) => text(String(topic).split(',').map((t) => t.trim().toLowerCase()).filter(Boolean)
+    .map((t) => HELP[t] ? `[${t}] ${HELP[t]}` : `[${t}] não existe; tópicos: ${Object.keys(HELP).join(', ')}`).join('\n')));
 
-tool('figma_inspect', 'Lê um frame pra virar código: layout, tamanhos, cores e tipografia com o nome da variável de cada valor. Detalhes: figma_help inspect.',
-  { id: str('id do nó'), depth: num('profundidade, padrão 3') }, ['id'],
-  async ({ id, depth }) => text(await call('inspect', { id, depth }, 60000)));
-
-tool('figma_component', 'Transforma nó em componente, junta variantes e cria propriedades. Detalhes: figma_help component.',
-  { id: str(), ids: { type: 'array', items: { type: 'string' } }, n: str('nome'), props: { type: 'object' } }, [],
-  async (a) => text(JSON.stringify(await call('component', a, 60000))));
-
-tool('figma_build', 'Cria uma tela/bloco inteiro a partir de uma spec JSON numa chamada só (formato no prompt do agente). Retorna id do nó raiz e avisos.',
-  { spec: { description: 'nó raiz da spec (objeto JSON)' }, parent: str('id do nó onde inserir; padrão: nova raiz na página') }, ['spec'],
-  async ({ spec, parent }) => {
-    const s = typeof spec === 'string' ? JSON.parse(spec) : spec;
-    await loadImages(s);
-    return text(JSON.stringify(await call('build', { spec: s, parent }, 120000)));
+tool('figma_inspect', 'Lê frames pra virar código: layout, tamanhos, cores e tipografia com o nome da variável de cada valor. Vários: ids. Detalhes: figma_help inspect.',
+  { id: str('id do nó'), ids: { type: 'array', items: { type: 'string' } }, depth: num('profundidade, padrão 3') }, [],
+  async ({ id, ids, depth }) => {
+    const out = [];
+    for (const i of ids || [id]) out.push(await call('inspect', { id: i, depth }, 60000));
+    return text(out.join('\n'));
   });
 
-tool('figma_edit', 'Correção sem reconstruir. Um nó: id ou path ("Tela 2/Conteudo/*", nomes de camada, * = todos) + patch com os campos da spec (n, text, type, color, fill, stroke, sw, r, o, w, h, d, gap, pad, align, cross, layout, x, y, img, brush, dynamic, anim; parent+index move; remove:true apaga). Vários: items [{id|path, patch}] numa chamada só.',
+tool('figma_component', 'Transforma nó em componente, junta variantes e cria propriedades. Vários: items [{id|ids, n, props}]. Detalhes: figma_help component.',
+  { id: str(), ids: { type: 'array', items: { type: 'string' } }, n: str('nome'), props: { type: 'object' }, items: { type: 'array', items: { type: 'object' } } }, [],
+  async (a) => {
+    const list = a.items || [a];
+    const out = [];
+    for (const it of list) {
+      try { out.push(await call('component', it, 60000)); } catch (e) { out.push({ erro: e.message }); }
+    }
+    return text(JSON.stringify(list.length === 1 ? out[0] : out));
+  });
+
+tool('figma_build', 'Cria telas/blocos inteiros a partir de spec JSON (formato no prompt do agente). Uma: spec (+parent). Várias numa chamada: specs [{spec, parent}]. Retorna id do nó raiz e avisos.',
+  { spec: { description: 'nó raiz da spec (objeto JSON)' }, parent: str('id do nó onde inserir; padrão: nova raiz na página'), specs: { type: 'array', items: { type: 'object' } } }, [],
+  async ({ spec, parent, specs }) => {
+    const list = specs || [{ spec, parent }];
+    const out = [];
+    for (const it of list) {
+      const s = typeof it.spec === 'string' ? JSON.parse(it.spec) : it.spec;
+      await loadImages(s);
+      try { out.push(await call('build', { spec: s, parent: it.parent }, 120000)); } catch (e) { out.push({ erro: e.message }); }
+    }
+    return text(JSON.stringify(list.length === 1 ? out[0] : out));
+  });
+
+tool('figma_edit', 'Correção sem reconstruir. Um nó: id ou path por nomes de camada ("Universo */Conteudo/*": * casa qualquer trecho do nome) + patch com os campos da spec (n, text, type, color, fill, stroke, sw, r, o, w, h, d, gap, pad, align, cross, layout, x, y, img, brush, dynamic, anim; parent+index move; remove:true apaga). Vários: items [{id|path, patch}] numa chamada só.',
   { id: str(), path: str(), patch: { type: 'object' }, items: { type: 'array', items: { type: 'object' } } }, [],
   async ({ id, path: p, patch, items }) => {
     const list = items || [{ id, path: p, patch: typeof patch === 'string' ? JSON.parse(patch) : patch }];
@@ -553,9 +570,16 @@ tool('figma_edit', 'Correção sem reconstruir. Um nó: id ou path ("Tela 2/Cont
     return text(JSON.stringify(await call('edit', { items: list }, 120000)));
   });
 
-tool('figma_variant', 'Tela nova clonando outra e aplicando patches por nome de camada numa chamada só (telas que repetem estrutura, Smart Animate). patches: {"Sol":{"x":900},"Conteudo/Titulo":{"text":"…"}}.',
-  { source: str('id ou nome da tela de origem'), name: str('nome da nova tela'), patches: { type: 'object' }, x: num(), y: num() }, ['source'],
-  async (a) => text(JSON.stringify(await call('variant', a, 120000))));
+tool('figma_variant', 'Telas novas clonando outra e aplicando patches por nome de camada (telas que repetem estrutura, Smart Animate). Todas numa chamada: variants [{name, patches:{"Sol":{"x":900},"Conteudo/Titulo":{"text":"…"}}}, …].',
+  { source: str('id ou nome da tela de origem'), variants: { type: 'array', items: { type: 'object' } }, name: str(), patches: { type: 'object' } }, ['source'],
+  async (a) => {
+    const list = a.variants || [{ name: a.name, patches: a.patches }];
+    const out = [];
+    for (const v of list) {
+      try { out.push(await call('variant', { source: a.source, ...v }, 120000)); } catch (e) { out.push({ erro: e.message }); }
+    }
+    return text(JSON.stringify(list.length === 1 ? out[0] : out));
+  });
 
 tool('figma_link', 'Protótipo: liga telas/nós. links: [{from, to, trigger:"click"|"hover"|"delay", ms, animation:"smart"|"dissolve"|"instant"|"push"|"slide", easing, duration (s)}]. from/to: id ou nome.',
   { links: { type: 'array', items: { type: 'object' } } }, ['links'],
@@ -565,11 +589,18 @@ tool('figma_tree', 'Contorno compacto de um nó (tipo, id, nome, tamanho). Padr�
   { id: str(), depth: num(), max_lines: num() }, [],
   async ({ id, depth, max_lines }) => text(await call('tree', { id, depth: depth ?? 2, max: max_lines || 120 })));
 
-tool('figma_shot', 'PNG pequeno de um nó pra conferir o resultado. Use uma vez no fim, não a cada passo.',
-  { id: str(), width: num('largura máx em px, padrão 480') }, ['id'],
-  async ({ id, width }) => {
-    const b64 = await call('shot', { id, width: width || 480 }, 60000);
-    return { content: [{ type: 'image', data: b64, mimeType: 'image/png' }] };
+tool('figma_shot', 'PNG pequeno de nós pra conferir o resultado (vários: ids, numa resposta). Use uma vez no fim, não a cada passo.',
+  { id: str(), ids: { type: 'array', items: { type: 'string' } }, width: num('largura máx em px, padrão 480') }, [],
+  async ({ id, ids, width }) => {
+    const content = [];
+    for (const i of ids || [id]) {
+      try {
+        const b64 = await call('shot', { id: i, width: width || (ids && ids.length > 1 ? 360 : 480) }, 60000);
+        if (ids) content.push({ type: 'text', text: i });
+        content.push({ type: 'image', data: b64, mimeType: 'image/png' });
+      } catch (e) { content.push({ type: 'text', text: `${i}: ${e.message}` }); }
+    }
+    return { content };
   });
 
 // ─── MCP por stdio: JSON-RPC 2.0, uma mensagem por linha ─────────────────────

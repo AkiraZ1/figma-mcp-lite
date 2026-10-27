@@ -88,6 +88,20 @@ await check('edit em lote por path com *', async () => {
   assert.equal(r.edited, 2);
   assert.equal(byName(tela, 'Sol').x, 900);
 });
+await check('curinga dentro do nome ("Universo *") e parent por nome', async () => {
+  const r = await L.edit([{ path: 'Universo */Sol', patch: { y: 10 } }]);
+  assert.equal(r.edited, 1);
+  const b = await L.build({ rect: 'Extra', w: 4, h: 4 }, 'Universo 1');
+  assert.equal(nodes.get(b.id).parent.name, 'Universo 1');
+});
+await check('keyframe *_XY vira vetor', async () => {
+  let got = null;
+  const sol = byName(tela, 'Sol');
+  sol.applyManualKeyframeTrack = (f, t) => { got = t; };
+  sol.timelines = [];
+  await L.edit([{ path: 'Universo 1/Sol', patch: { anim: { keys: { SCALE_XY: [[0, 1], [1, 1.06]] } } } }]);
+  assert.deepEqual(got.keyframes[1].value, { type: 'VECTOR', value: { x: 1.06, y: 1.06 } });
+});
 await check('variant clona e aplica patches por nome', async () => {
   const r = await L.variant('Universo 1', { name: 'Universo 2', patches: { Sol: { x: 100 }, 'Conteudo/*': { o: 1 }, Nada: { x: 1 } } });
   const v = nodes.get(r.id);
@@ -96,6 +110,12 @@ await check('variant clona e aplica patches por nome', async () => {
   assert.equal(byName(tela, 'Sol').x, 900, 'original intacto');
   assert.ok(r.warn.some((w) => w.includes('Nada')));
   assert.ok(v.x > tela.x, 'posicionada à direita');
+});
+await check('variant em lote cria várias telas numa chamada', async () => {
+  const r = await L.variant('Universo 1', { variants: [{ name: 'U3', patches: { Sol: { x: 300 } } }, { name: 'U4', patches: { Sol: { x: 500 } } }] });
+  assert.equal(r.created.length, 2);
+  assert.equal(byName(nodes.get(r.created[1].id), 'Sol').x, 500);
+  assert.ok(nodes.get(r.created[1].id).x > nodes.get(r.created[0].id).x, 'lado a lado');
 });
 await check('link liga telas com Smart Animate', async () => {
   const r = await L.link([{ from: 'Universo 1', to: 'Universo 2', trigger: 'delay', ms: 800, animation: 'smart' }]);
@@ -111,5 +131,5 @@ await check('spec antiga (0.5.x) continua funcionando', async () => {
   assert.ok(byName(nodes.get(r.id), 'Divisor'));
 });
 
-console.log(`\n${ok}/9 ok`);
-process.exit(ok === 9 ? 0 : 1);
+console.log(`\n${ok}/12 ok`);
+process.exit(ok === 12 ? 0 : 1);

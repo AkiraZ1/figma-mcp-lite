@@ -24,7 +24,10 @@ function fakePlugin(file = 'Arquivo Teste') {
     const m = JSON.parse(raw);
     const result = m.cmd === 'status' ? { file, page: 'P1', selection: [] }
       : m.cmd === 'edit' ? { edited: m.args.items.length, patched: Object.keys(m.args.items[0].patch).join(',') }
-      : m.cmd === 'build' ? { id: '1:2', nodes: 3 } : null;
+      : m.cmd === 'build' ? { id: '1:2', nodes: 3 }
+      : m.cmd === 'variant' ? { id: '1:9', name: m.args.name, patched: Object.keys(m.args.patches || {}).length }
+      : m.cmd === 'shot' ? 'iVBORw0KGgo='
+      : m.cmd === 'inspect' ? 'FRAME "' + m.args.id + '" 10x10' : null;
     ws.send(JSON.stringify({ id: m.id, ok: true, result }));
   });
   return new Promise((r) => ws.on('open', () => r(ws)));
@@ -101,8 +104,35 @@ await check('instalação remota: grava só a cópia íntegra', async () => {
   assert.ok(bad.out.erro && !bad.store.lib, JSON.stringify(bad.out));
 });
 
+await check('lote: specs, variants, shots e inspect numa chamada cada', async () => {
+  const b2 = JSON.parse(txt(await b.callTool({ name: 'figma_build', arguments: { specs: [{ spec: { frame: 'A' } }, { spec: { frame: 'B' } }] } })));
+  assert.equal(b2.length, 2);
+  const v = JSON.parse(txt(await b.callTool({ name: 'figma_variant', arguments: { source: 'A', variants: [{ name: 'A2', patches: { x: {} } }, { name: 'A3' }] } })));
+  assert.deepEqual(v.map((x) => x.name), ['A2', 'A3']);
+  const sh = await b.callTool({ name: 'figma_shot', arguments: { ids: ['1:2', '1:3'] } });
+  assert.equal(sh.content.filter((c) => c.type === 'image').length, 2);
+  assert.equal(txt(await b.callTool({ name: 'figma_inspect', arguments: { ids: ['1:2', '1:3'] } })).split('\n').length, 2);
+});
+
+await check('orçamento de tokens (quebra se crescer)', async () => {
+  const { tools } = await a.listTools();
+  const fixed = Math.round((JSON.stringify(tools).length + a.getInstructions().length) / 4);
+  assert.ok(fixed < 1400, `ferramentas + instruções: ${fixed} tokens`);
+  for (const t of ['svg', 'img', 'draw', 'anim', 'component', 'inspect']) {
+    const h = txt(await a.callTool({ name: 'figma_help', arguments: { topic: t } }));
+    assert.ok(h.length / 4 < 300, `help ${t}: ${Math.round(h.length / 4)} tokens`);
+  }
+  const multi = txt(await a.callTool({ name: 'figma_help', arguments: { topic: 'anim,draw' } }));
+  assert.ok(multi.includes('[anim]') && multi.includes('[draw]'));
+  const fs = await import('node:fs');
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const prompt = fs.readFileSync(path.join(root, 'agents/prompt.md'), 'utf8') + fs.readFileSync(path.join(root, 'agents/spec.md'), 'utf8');
+  assert.ok(prompt.length < 2600, `prompt + spec: ${prompt.length} caracteres`);
+  console.log(`   (fixo: ${fixed} tokens · prompt+spec: ${prompt.length} caracteres)`);
+});
+
 plugin.close();
 await a.close();
 await b.close();
-console.log(`\n${ok}/8 ok`);
-process.exit(ok === 8 ? 0 : 1);
+console.log(`\n${ok}/10 ok`);
+process.exit(ok === 10 ? 0 : 1);

@@ -152,6 +152,7 @@ function lookup(map, name) {
 }
 
 var varCache = {};
+var BRUSHES = {};
 async function getVar(name) {
   // "$#<chave>": variável de biblioteca NÃO habilitada no arquivo, achada pela
   // busca oficial (search_design_system). Importa direto pela chave.
@@ -442,6 +443,9 @@ Builder.prototype.common = async function (node, s) {
       else {
         var bname = String(s.brush.name || s.brush).toUpperCase();
         var scatter = ['BUBBLEGUM', 'WITCH_HOUSE', 'SHOEGAZE', 'HONKY_TONK', 'SCREAMO', 'DRONE', 'DOO_WOP', 'SPOKEN_WORD', 'VAPORWAVE', 'OI'].indexOf(bname) >= 0;
+        // A Figma exige carregar os pincéis do tipo antes de usar.
+        var btype = scatter ? 'SCATTER' : 'STRETCH';
+        if (!BRUSHES[btype]) { await figma.loadBrushesAsync(btype); BRUSHES[btype] = true; }
         node.complexStrokeProperties = scatter
           ? { type: 'BRUSH', brushType: 'SCATTER', brushName: bname, gap: s.brush.gap || 1, wiggle: s.brush.wiggle || 0, sizeJitter: s.brush.sizeJitter || 0, angularJitter: s.brush.angularJitter || 0, rotation: s.brush.rotation || 0 }
           : { type: 'BRUSH', brushType: 'STRETCH', brushName: bname, direction: s.brush.direction || 'FORWARD' };
@@ -650,7 +654,10 @@ Builder.prototype.anim = async function (node, a) {
       Object.keys(a.keys).forEach(function (k) {
         node.applyManualKeyframeTrack({ type: 'PROPERTY', name: k.toUpperCase() }, {
           keyframes: a.keys[k].map(function (pt, i) {
-            var kf = { timelinePosition: pt[0] + delay, value: { type: 'FLOAT', value: pt[1] } };
+            // *_XY (escala/translação nos dois eixos) pede vetor: [t, v] vira {x: v, y: v}.
+            var xy = k.toUpperCase().slice(-3) === '_XY';
+            var val = Array.isArray(pt[1]) ? { x: pt[1][0], y: pt[1][1] } : { x: pt[1], y: pt[1] };
+            var kf = { timelinePosition: pt[0] + delay, value: xy ? { type: 'VECTOR', value: val } : { type: 'FLOAT', value: pt[1] } };
             if (i) kf.easing = { type: String(pt[2] || a.ease || 'EASE_OUT').toUpperCase() };
             return kf;
           }),
@@ -768,7 +775,8 @@ Builder.prototype.node = async function (s, parent) {
 
 async function build(spec, parentId) {
   var b = new Builder();
-  var parent = parentId ? await figma.getNodeByIdAsync(parentId) : null;
+  // parent: id, nome ou caminho ("Universo 1/Conteudo").
+  var parent = parentId ? (await find(parentId))[0] || null : null;
   if (parentId && !parent) throw new Error('nó pai não encontrado: ' + parentId);
   // Link com node-id de página: cria na raiz dessa página (ao lado do que existe).
   var onPage = null;
@@ -793,6 +801,21 @@ async function build(spec, parentId) {
   return out;
 }
 
+// "Universo *" casa com "Universo 1", "Universo 2"…; "*" sozinho, com tudo.
+function glob(name, pat) {
+  if (pat.indexOf('*') < 0) return name === pat;
+  var parts = pat.split('*');
+  if (name.indexOf(parts[0]) !== 0) return false;
+  var pos = parts[0].length;
+  for (var i = 1; i < parts.length; i++) {
+    if (i === parts.length - 1) return name.length - parts[i].length >= pos && name.slice(name.length - parts[i].length) === parts[i];
+    var at = name.indexOf(parts[i], pos);
+    if (at < 0) return false;
+    pos = at + parts[i].length;
+  }
+  return true;
+}
+
 // ─── achar nós: id ("12:34") ou caminho por nome a partir da página ─────────
 // "Universo 2/Conteudo/*": cada trecho é o nome de um filho; "*" pega todos.
 async function find(ref, from) {
@@ -804,7 +827,7 @@ async function find(ref, from) {
     var next = [];
     var pool = level ? [] : figma.currentPage.children.slice();
     if (level) level.forEach(function (n) { if ('children' in n) pool = pool.concat(n.children); });
-    pool.forEach(function (c) { if (segs[i] === '*' || c.name === segs[i]) next.push(c); });
+    pool.forEach(function (c) { if (glob(c.name, segs[i])) next.push(c); });
     level = next;
   }
   return level || [];
@@ -882,6 +905,19 @@ async function edit(ref, patch) {
 // com esse nome). Troca uma spec inteira por poucos patches.
 async function variant(srcRef, o) {
   o = o || {};
+  // Várias telas numa chamada só: { variants: [{ name, patches }, …] }.
+  if (Array.isArray(o.variants)) {
+    var made = [];
+    var warns = [];
+    for (var vi = 0; vi < o.variants.length; vi++) {
+      var r = await variant(srcRef, o.variants[vi]);
+      made.push({ id: r.id, name: r.name, patched: r.patched });
+      if (r.warn) warns = warns.concat(r.warn);
+    }
+    var all = { v: V, created: made };
+    if (warns.length) all.warn = warns.slice(0, 15);
+    return all;
+  }
   var b = new Builder();
   var src = (await find(srcRef))[0];
   if (!src) throw new Error('tela de origem não achada: ' + srcRef);

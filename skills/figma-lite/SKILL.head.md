@@ -21,5 +21,5 @@ fileKey vem da URL figma.com/design/<fileKey>/…
 2. **Build:** o mesmo trecho trocando o final por `return await L.build(SPEC,PARENT)`. SPEC é a tela inteira (formato abaixo). PARENT é `null` pra nova tela, ou o id de um nó pra inserir dentro dele.
 3. **Resposta** em até 5 linhas: o que foi criado, id do nó raiz e os avisos (`warn`) que importam. Não tire print: o get_screenshot não devolve imagem aqui.
 
-Mesmo trecho, outros finais: `L.edit([{id|path,patch},…])` (ajustes em lote; path por nome, `*` = todos), `L.variant(ORIGEM,{name,patches:{"Camada":{…}}})` (telas que repetem estrutura: build da 1ª, as outras assim), `L.link([{from,to,trigger:"click"|"delay",ms,animation:"smart"}])` (protótipo), `L.inspect(ID,3)` (ler pra código), `L.component({id}|{ids,n,props})`. Nunca reconstrua a tela.
+Mesmo trecho, outros finais: `L.edit([{id|path,patch},…])` (ajustes em lote; path por nome, `*` = todos), `L.variant(ORIGEM,{variants:[{name,patches:{"Camada":{…}}},…]})` (telas que repetem estrutura: build da 1ª, todas as outras numa chamada), `L.link([{from,to,trigger:"click"|"delay",ms,animation:"smart"}])` (protótipo), `L.inspect(ID,3)` (ler pra código), `L.component({id}|{ids,n,props})`. Nunca reconstrua a tela.
 
