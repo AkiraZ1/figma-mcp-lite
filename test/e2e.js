@@ -85,15 +85,20 @@ await check('dois arquivos abertos: exige escolher e roteia pelo nome', async ()
   outro.close();
 });
 
-await check('instalação remota: código colado roda e devolve versão/tamanho', async () => {
+await check('instalação remota: grava só a cópia íntegra', async () => {
   const r = txt(await a.callTool({ name: 'figma_lite_install', arguments: {} }));
   const code = r.split('\n').slice(1).join('\n');
-  const store = {};
-  const fakeFigma = { root: { setSharedPluginData: (ns, k, v) => { store[k] = v; }, getSharedPluginData: (ns, k) => store[k] || '' } };
   const AF = Object.getPrototypeOf(async function () {}).constructor;
-  const out = await new AF('figma', code)(fakeFigma);
-  assert.ok(r.includes(`"len":${out.len}`) && r.includes(`"v":"${out.v}"`), JSON.stringify(out));
-  assert.equal(store.lib.length, out.len);
+  const run = async (c) => {
+    const store = {};
+    const fakeFigma = { root: { setSharedPluginData: (ns, k, v) => { store[k] = v; }, getSharedPluginData: (ns, k) => store[k] || '' } };
+    return { out: await new AF('figma', c)(fakeFigma), store };
+  };
+  const ok = await run(code);
+  assert.ok(r.includes(`Versão ${ok.out.v}`), JSON.stringify(ok.out));
+  assert.equal(ok.store.lib.length, ok.out.len);
+  const bad = await run(code.replace('lastIndexOf', 'lastIndexOX'));
+  assert.ok(bad.out.erro && !bad.store.lib, JSON.stringify(bad.out));
 });
 
 plugin.close();

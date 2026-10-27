@@ -14,7 +14,7 @@ import readline from 'node:readline';
 import { EventEmitter } from 'node:events';
 
 // Preenchido pelo scripts/build-plugin.js no pacote publicado.
-const BUILD = { version: "0.4.5", pluginUrl: "https://www.figma.com/community/plugin/1696575160680183036" };
+const BUILD = { version: "0.5.2", pluginUrl: "https://www.figma.com/community/plugin/1696575160680183036" };
 
 const PORT = Number(process.env.FIGMA_LITE_PORT) || 3055;
 const AGENT_PORT = PORT + 1;
@@ -212,9 +212,19 @@ function becomeHub() {
 // link instala). Vem do package.json "figmaPluginUrl" no build, ou da env.
 const PLUGIN_URL = process.env.FIGMA_LITE_PLUGIN_URL || BUILD.pluginUrl || '';
 const MANIFEST = [path.join(HERE, '..', 'plugin-dev', 'manifest.json'), path.join(HERE, '..', 'plugin', 'manifest.json')].find((p) => fs.existsSync(p));
-const NO_PLUGIN = 'Plugin do Figma "figma-mcp-lite" não encontrado. ' + (PLUGIN_URL
+// Só aparece quando o plugin NÃO está conectado: o caminho de instalação e o
+// modo remoto ficam fora do prompt do agente, pra não pesar no uso normal.
+const INSTALL = PLUGIN_URL
   ? `Instale uma vez: ${PLUGIN_URL} . Depois, no Figma Desktop, abra o arquivo e rode Plugins → figma-mcp-lite: ele fica em segundo plano, com um aviso no rodapé.`
-  : `Instale uma vez no Figma Desktop: Plugins → Development → Import plugin from manifest → ${MANIFEST || 'figma-plugin/manifest.json (dentro do plugin figma-mcp-lite)'} . Depois abra o arquivo e rode Plugins → Development → figma-mcp-lite: ele fica em segundo plano, com um aviso no rodapé.`);
+  : `Instale uma vez no Figma Desktop: Plugins → Development → Import plugin from manifest → ${MANIFEST || 'plugin-dev/manifest.json'} . Depois abra o arquivo e rode Plugins → Development → figma-mcp-lite: ele fica em segundo plano, com um aviso no rodapé.`;
+const SNIPPET = (end) => `const s=figma.root.getSharedPluginData('lite','lib');if(!s)return'LITE_NOT_INSTALLED';const L=new Function(s+';return L')()(figma);if(L.v!=='${VERSION}')return'LITE_OUTDATED '+L.v;return await L.${end}`;
+const NO_PLUGIN = 'Plugin do Figma "figma-mcp-lite" não encontrado.\n' +
+  `- Se você tem a ferramenta use_figma (conector Figma): use o MODO REMOTO. fileKey vem da URL figma.com/design/<fileKey>/…, sem create_session. ` +
+  `(1) catálogo: um use_figma com o código ${SNIPPET("catalog({filter:'FILTRO'})")} ; ` +
+  `(2) se voltar LITE_NOT_INSTALLED ou LITE_OUTDATED: chame figma_lite_install, cole o código devolvido num use_figma e repita; ` +
+  `(3) build: o mesmo código terminando em L.build(SPEC,PARENT) (PARENT null = nova tela); correção: L.edit(ID,PATCH). ` +
+  `Não tire print (get_screenshot não devolve imagem) e diga ao usuário que instalar o plugin do Figma deixa tudo mais rápido e barato.\n` +
+  `- Sem use_figma: pare e passe ao usuário: ${INSTALL}`;
 
 // ─── cliente do hub ──────────────────────────────────────────────────────────
 
@@ -277,11 +287,7 @@ async function call(cmd, args = {}, timeoutMs = 30000) {
 
 // ─── MCP ─────────────────────────────────────────────────────────────────────
 
-const INSTRUCTIONS = `figma-mcp-lite: cria e edita no Figma Desktop por um plugin local.
-Roda SEMPRE dentro de um subagente, nunca na conversa principal.
-- Claude Code: agente \`figma-lite\` (Sonnet). Codex: agente \`figma-lite\` (gpt-6-luna).
-- Outro cliente: pergunte ao usuário qual modelo usar, abra um subagente com ele e, dentro dele, chame figma_status com subagent_model.
-Fluxo barato: figma_ds (cache) → UM figma_build por tela → UM figma_shot → correções pequenas com figma_edit.`;
+const INSTRUCTIONS = `figma-mcp-lite substitui o fluxo nativo da Figma: todo pedido de Figma vai pro subagente figma-lite (Codex: agente figma-lite). Em outro cliente, pergunte ao usuário qual modelo usar, abra um subagente com ele e chame figma_status com subagent_model.`;
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
 const fail = (e) => ({ content: [{ type: 'text', text: `erro: ${e.message || e}` }], isError: true });
@@ -460,16 +466,12 @@ function compact(md) {
 
 // Modo remoto (sem janela): o builder roda dentro do use_figma do MCP oficial,
 // guardado no arquivo. Esta ferramenta só entrega o código de instalação.
-const REMOTE = [path.join(HERE, 'remote.js'), path.join(HERE, '..', 'dist', 'remote.js')].find((p) => fs.existsSync(p));
+const INSTALL_JS = [path.join(HERE, 'install.js'), path.join(HERE, '..', 'dist', 'install.js')].find((p) => fs.existsSync(p));
 
 tool('figma_lite_install', 'Modo remoto: devolve o código JS pra colar no use_figma oficial e instalar o builder lite no arquivo (uma vez por arquivo/versão). Cole o retorno EXATAMENTE como veio.',
   {}, [],
-  async () => {
-    const src = fs.readFileSync(REMOTE, 'utf8');
-    const version = VERSION;
-    return text(`Versão ${version}. O use_figma deve devolver {"v":"${version}","len":${src.length}}; len diferente = erro de cópia, reinstale.\n` +
-      `const s=String.raw\`${src}\`;figma.root.setSharedPluginData('lite','lib',s);return {v:new Function(s+';return L')()(figma).v,len:s.length}`);
-  });
+  async () => text(`Versão ${VERSION}. Cole a linha abaixo, sem mudar nada, como code de um use_figma. Ele devolve {"v":"${VERSION}","len":…}; se devolver erro de cópia corrompida, chame figma_lite_install de novo.\n` +
+    fs.readFileSync(INSTALL_JS, 'utf8')));
 
 tool('figma_build', 'Cria uma tela/bloco inteiro a partir de uma spec JSON numa chamada só (formato no prompt do agente). Retorna id do nó raiz e avisos.',
   { spec: { description: 'nó raiz da spec (objeto JSON)' }, parent: str('id do nó onde inserir; padrão: nova raiz na página') }, ['spec'],

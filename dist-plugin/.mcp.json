@@ -2,8 +2,10 @@
   "mcpServers": {
     "lite": {
       "type": "stdio",
-      "command": "${CLAUDE_PLUGIN_ROOT}/server/start.sh",
-      "args": [],
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/server/server.mjs"
+      ],
       "env": {
         "FIGMA_LITE_SUBAGENT": "claude-code-plugin"
       }

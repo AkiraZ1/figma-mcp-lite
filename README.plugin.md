@@ -24,9 +24,12 @@ Monta telas no Figma gastando **~10× menos token** que o fluxo nativo da Figma 
 2. Instala o plugin **figma-mcp-lite** no Figma Desktop pela Community: https://www.figma.com/community/plugin/1696575160680183036 (se ele não estiver aberto, o agente te lembra com esse link). Pra desenvolver, importa o manifest de `plugin-dev/` (id próprio de desenvolvimento, separado do plugin publicado): Figma Desktop → Plugins → Development → Import plugin from manifest.
 3. No Figma Desktop, abre o arquivo e roda **Plugins → figma-mcp-lite**. Ele fica em segundo plano, só com um aviso no rodapé ("conectado, rodando em segundo plano"), e tem um botão **Parar**.
 
-**Requer Node.js 20 ou mais novo instalado no computador.** O Claude Desktop e o instalador nativo do Claude Code não trazem Node. No macOS, prefira o instalador de https://nodejs.org: ele coloca o `node` em `/usr/local/bin`, que o app enxerga mesmo aberto pelo Finder. O plugin também procura o Node do Homebrew, nvm, Volta, fnm e `~/.local/node`. Por enquanto funciona em macOS e Linux.
+**Requer Node.js 20 ou mais novo instalado no computador.** O Claude Desktop e o instalador nativo do Claude Code não trazem Node. No macOS, prefira o instalador de https://nodejs.org: ele coloca o `node` em `/usr/local/bin`, que o app enxerga mesmo aberto pelo Finder. Funciona em macOS, Windows e Linux. No Windows, o instalador do nodejs.org já põe o Node no PATH. Se o Claude não achar o Node (instalado por nvm, por exemplo), troque `"node"` pelo caminho completo no `.mcp.json` do plugin.
 
 ## Uso
+
+Pra ativar numa conversa (e conferir se falta instalar algo), digite **`/figma-mcp-lite:ativar`**. Ele troca o fluxo nativo da Figma pelo figma-mcp-lite nessa conversa e diz o que está faltando: Node, plugin do Figma ou conector.
+
 
 Pede normalmente, com o link do arquivo:
 
@@ -37,6 +40,14 @@ O Claude delega pro `figma-lite`, que:
 2. monta a tela inteira numa chamada;
 3. confere com um print;
 4. devolve o id do frame e os avisos.
+
+## No chat do claude.ai
+
+No chat (navegador ou app, fora do Cowork) não existe servidor local. O plugin traz a skill **figma-lite**, que faz o mesmo trabalho pelo conector oficial **Figma** do claude.ai: liga o conector em Configurações → Conectores e pede normalmente com o link do arquivo. Na primeira vez em cada arquivo ela instala o builder (~4k tokens), e depois cada tela é uma chamada curta. Não tem print de conferência e é mais lento que o plugin local.
+
+## O figma-mcp-lite substitui o fluxo nativo da Figma
+
+Com ele instalado, o Claude é orientado a usar o figma-mcp-lite em todo pedido de Figma, e não as skills nativas da Figma (`figma-use`, `figma-generate-design`) nem a sugestão de instalar o conector nativo.
 
 ## Sem o plugin do Figma aberto (modo remoto)
 

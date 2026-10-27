@@ -9,7 +9,7 @@ NODE=$(command -v node)
 VERSION=$(node -p "require('$ROOT/package.json').version")
 # A versão vai dentro do trecho de build do prompt: builder velho no arquivo
 # devolve LITE_OUTDATED em vez de rodar com bug já corrigido.
-PROMPT=$(sed "s/__VERSION__/$VERSION/g" "$ROOT/agents/prompt.md")
+PROMPT=$(cat "$ROOT/agents/prompt.md" "$ROOT/agents/spec.md" | sed "s/__VERSION__/$VERSION/g")
 CODEX_MODEL=${CODEX_MODEL:-gpt-6-luna}
 
 (cd "$ROOT" && npm install --silent && node scripts/bundle.js)

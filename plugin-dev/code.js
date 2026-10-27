@@ -72,8 +72,12 @@ const LITE = (function (figma) {
 // setPluginData, loadAllPagesAsync nem fetch; sem crase nem "${" no fonte
 // (a instalação embrulha o código minificado em String.raw).
 
-var V = '0.4.5';
+var V = '0.5.2';
 var NS = 'lite';
+// Sem barra invertida no fonte: a instalação remota é copiada pelo modelo,
+// e barras são o que ele mais erra ao escapar. Daí o NL e nada de regex com \.
+// (via map: o esbuild dobraria String.fromCharCode(10) de volta pra "\n")
+var NL = [10].map(function (c) { return String.fromCharCode(c); })[0];
 var ALIGN = { start: 'MIN', center: 'CENTER', end: 'MAX', between: 'SPACE_BETWEEN', baseline: 'BASELINE' };
 var WEIGHT = { 100: 'Thin', 200: 'Extra Light', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semi Bold', 700: 'Bold', 800: 'Extra Bold', 900: 'Black' };
 
@@ -137,17 +141,21 @@ async function index() {
 
 function lookup(map, name) {
   if (!name) return null;
-  return map[String(name).replace(/^\$/, '').toLowerCase()] || null;
+  var n = String(name);
+  if (n.charAt(0) === '$') n = n.slice(1);
+  return map[n.toLowerCase()] || null;
 }
 
 var varCache = {};
 async function getVar(name) {
   // "$#<chave>": variável de biblioteca NÃO habilitada no arquivo, achada pela
   // busca oficial (search_design_system). Importa direto pela chave.
-  var key = /^\$?#([0-9a-f]{20,})$/i.exec(String(name));
-  if (key) {
-    if (!varCache[key[1]]) varCache[key[1]] = await figma.variables.importVariableByKeyAsync(key[1]);
-    return varCache[key[1]];
+  var ref = String(name);
+  if (ref.charAt(0) === '$') ref = ref.slice(1);
+  if (ref.charAt(0) === '#' && /^[0-9a-f]{20,}$/i.test(ref.slice(1))) {
+    ref = ref.slice(1);
+    if (!varCache[ref]) varCache[ref] = await figma.variables.importVariableByKeyAsync(ref);
+    return varCache[ref];
   }
   var e = lookup((await index()).vars, name);
   if (!e) return null;
@@ -188,7 +196,7 @@ function fmtVal(v) {
 // de pelo menos 15 caracteres), sem a cauda de palavras-chave que alguns DS anexam.
 function firstSentence(d) {
   if (!d) return '';
-  d = d.split('\n').join(' ').split('  ').join(' ').trim();
+  d = d.split(NL).join(' ').split('  ').join(' ').trim();
   var end = -1;
   for (var i = 15; i < d.length - 1; i++) {
     var c = d.charAt(i);
@@ -253,7 +261,9 @@ async function scan() {
         return k.split('#')[0] + (d.type === 'VARIANT' ? '=' + d.variantOptions.join('|') : '(' + d.type.toLowerCase() + ')');
       });
     } catch (e) {
-      cat.skipped.push(owner.name + ' (' + owner.id + '): ' + String((e && e.message) || e).replace(/^in \w+: /, ''));
+      var msg = String((e && e.message) || e);
+      if (msg.indexOf('in ') === 0 && msg.indexOf(': ') > 0) msg = msg.slice(msg.indexOf(': ') + 2);
+      cat.skipped.push(owner.name + ' (' + owner.id + '): ' + msg);
       return;
     }
     cat.comps.push(owner.name + (lib ? ' [lib]' : '') + ' · ref ' + owner.key + (props.length ? ' · ' + props.join(', ') : ''));
@@ -279,11 +289,20 @@ async function scan() {
 // variáveis) que o filtro não pediu pelo nome vira uma linha só, com os
 // nomes e sem valores. Mantém o catálogo curto sem saber nada do DS: pra ver
 // os valores, o agente pede o grupo no filtro ("bg/accent").
+// "$a/b/c… resto" → { group: "a/b", rest: "c…" } (só nomes com 3+ níveis).
+function splitVar(l) {
+  if (l.charAt(0) !== '$') return null;
+  var sp = l.indexOf(' ');
+  var parts = l.slice(1, sp < 0 ? l.length : sp).split('/');
+  if (parts.length < 3) return null;
+  return { group: parts[0] + '/' + parts[1], rest: parts.slice(2).join('/') };
+}
+
 function collapse(lines, fs) {
   var groups = {};
   lines.forEach(function (l) {
-    var m = /^\$([^/ ]+\/[^/ ]+)\/(\S+) /.exec(l);
-    if (m) (groups[m[1]] = groups[m[1]] || []).push(m[2]);
+    var v = splitVar(l);
+    if (v) (groups[v.group] = groups[v.group] || []).push(v.rest);
   });
   var big = {};
   Object.keys(groups).forEach(function (g) {
@@ -293,17 +312,19 @@ function collapse(lines, fs) {
   var out = [];
   var done = {};
   lines.forEach(function (l) {
-    var m = /^\$([^/ ]+\/[^/ ]+)\//.exec(l);
-    if (!m || !big[m[1]]) { out.push(l); return; }
-    if (done[m[1]]) return;
-    done[m[1]] = true;
-    out.push('$' + m[1] + '/… (' + groups[m[1]].length + ', valores com filter "' + m[1] + '"): ' + groups[m[1]].join(' '));
+    var v = splitVar(l);
+    if (!v || !big[v.group]) { out.push(l); return; }
+    if (done[v.group]) return;
+    done[v.group] = true;
+    out.push('$' + v.group + '/… (' + groups[v.group].length + ', valores com filter "' + v.group + '"): ' + groups[v.group].join(' '));
   });
   return out;
 }
 
 // Saída compacta: agrupada por coleção; props tipográficas de um mesmo prefixo
 // (…/font-size, …/line-height…) viram uma linha "type <prefixo>: …".
+var TYPE_PROPS = ['font-size', 'line-height', 'font-weight', 'font-weight-emphasis', 'letter-spacing', 'font-family'];
+
 function fmtCatalog(cat, filter) {
   var fs = (filter || '').toLowerCase().split('|').map(function (x) { return x.trim(); }).filter(Boolean);
   var keep = function (l) { return !fs.length || fs.some(function (f) { return l.toLowerCase().indexOf(f) >= 0; }); };
@@ -319,7 +340,8 @@ function fmtCatalog(cat, filter) {
     var types = {};
     var typeOrder = [];
     groups[g].forEach(function (r) {
-      var m = /^(.*)\/(font-size|line-height|font-weight|font-weight-emphasis|letter-spacing|font-family)$/.exec(r[1]);
+      var cut = r[1].lastIndexOf('/');
+      var m = cut > 0 && TYPE_PROPS.indexOf(r[1].slice(cut + 1)) >= 0 ? [null, r[1].slice(0, cut), r[1].slice(cut + 1)] : null;
       if (m && m[1].indexOf('/') >= 0) {
         if (!types[m[1]]) { types[m[1]] = []; typeOrder.push(m[1]); }
         types[m[1]].push(m[2].replace('font-', '').replace('letter-spacing', 'ls%').replace('line-height', 'lh') + ' ' + r[2]);
@@ -329,14 +351,14 @@ function fmtCatalog(cat, filter) {
     });
     typeOrder.forEach(function (t) { lines.push('type ' + t + ': ' + types[t].join(', ')); });
     lines = collapse(lines.filter(keep), fs);
-    if (lines.length) out.push('## ' + g + '\n' + lines.join('\n'));
+    if (lines.length) out.push('## ' + g + NL + lines.join(NL));
   });
   var st = cat.styles.filter(keep);
-  if (st.length) out.push('## Estilos\n' + st.join('\n'));
+  if (st.length) out.push('## Estilos' + NL + st.join(NL));
   var cp = cat.comps.filter(keep);
-  if (cp.length) out.push('## Componentes (inst: nome ou ref)\n' + cp.join('\n'));
-  if (cat.skipped && cat.skipped.length) out.push('## Componentes pulados (com erro no Figma; corrija e rode refresh)\n' + cat.skipped.join('\n'));
-  return out.join('\n') || 'nada no catálogo com esse filtro';
+  if (cp.length) out.push('## Componentes (inst: nome ou ref)' + NL + cp.join(NL));
+  if (cat.skipped && cat.skipped.length) out.push('## Componentes pulados (com erro no Figma; corrija e rode refresh)' + NL + cat.skipped.join(NL));
+  return out.join(NL) || 'nada no catálogo com esse filtro';
 }
 
 async function catalog(o) {
@@ -464,9 +486,10 @@ Builder.prototype.typeRole = async function (t, s) {
     var v = await getVar(name);
     return v ? { v: v, val: v.resolveForConsumer(t).value } : null;
   };
-  var type = s.type.replace(/\/$/, '');
-  var strong = /\/strong$/.test(type);
-  if (strong) type = type.replace(/\/strong$/, '');
+  var type = s.type;
+  if (type.charAt(type.length - 1) === '/') type = type.slice(0, -1);
+  var strong = type.slice(-7) === '/strong';
+  if (strong) type = type.slice(0, -7);
   var base = null, size = null;
   var cands = [type + '/', 'text/' + type + '/', 'typography/' + type + '/', 'font/' + type + '/'];
   for (var i = 0; i < cands.length && !size; i++) { size = await get(cands[i] + 'font-size'); if (size) base = cands[i]; }
