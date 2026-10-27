@@ -94,6 +94,10 @@ await check('curinga dentro do nome ("Universo *") e parent por nome', async () 
   const b = await L.build({ rect: 'Extra', w: 4, h: 4 }, 'Universo 1');
   assert.equal(nodes.get(b.id).parent.name, 'Universo 1');
 });
+await check('locate lista caminhos que casam com o padrão', async () => {
+  const out = await L.locate('Universo */So*');
+  assert.ok(out.includes('Universo 1/Sol'), out);
+});
 await check('keyframe *_XY vira vetor', async () => {
   let got = null;
   const sol = byName(tela, 'Sol');
@@ -131,5 +135,5 @@ await check('spec antiga (0.5.x) continua funcionando', async () => {
   assert.ok(byName(nodes.get(r.id), 'Divisor'));
 });
 
-console.log(`\n${ok}/12 ok`);
-process.exit(ok === 12 ? 0 : 1);
+console.log(`\n${ok}/13 ok`);
+process.exit(ok === 13 ? 0 : 1);

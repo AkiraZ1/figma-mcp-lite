@@ -87,6 +87,7 @@ HANDLERS.status = async function () {
 };
 
 HANDLERS.tree = async function (a) {
+  if (a.find) return LITE.locate(a.find, a.max);
   let root;
   if (a.id) root = await nodeOrThrow(a.id);
   else root = figma.currentPage.selection[0] || figma.currentPage;

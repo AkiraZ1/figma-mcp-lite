@@ -585,9 +585,9 @@ tool('figma_link', 'Protótipo: liga telas/nós. links: [{from, to, trigger:"cli
   { links: { type: 'array', items: { type: 'object' } } }, ['links'],
   async ({ links }) => text(JSON.stringify(await call('link', { links }, 60000))));
 
-tool('figma_tree', 'Contorno compacto de um nó (tipo, id, nome, tamanho). Padrão: seleção ou página atual.',
-  { id: str(), depth: num(), max_lines: num() }, [],
-  async ({ id, depth, max_lines }) => text(await call('tree', { id, depth: depth ?? 2, max: max_lines || 120 })));
+tool('figma_tree', 'Contorno compacto de um nó (tipo, id, nome, tamanho, posição); padrão: seleção ou página. find: só as camadas que casam com um caminho ("Universo */Órbita*"), com caminho e id, pra descobrir nomes numa chamada.',
+  { id: str(), find: str(), depth: num(), max_lines: num() }, [],
+  async ({ id, find, depth, max_lines }) => text(await call('tree', { id, find, depth: depth ?? 2, max: max_lines }, 60000)));
 
 tool('figma_shot', 'PNG pequeno de nós pra conferir o resultado (vários: ids, numa resposta). Use uma vez no fim, não a cada passo.',
   { id: str(), ids: { type: 'array', items: { type: 'string' } }, width: num('largura máx em px, padrão 480') }, [],

@@ -1071,7 +1071,20 @@ async function component(o) {
   return { v: V, id: target.id, type: target.type, ref: target.key, props: added };
 }
 
-return { v: V, build: build, edit: edit, variant: variant, link: link, catalog: catalog, reindex: reindex, inspect: inspect, component: component };
+// Lista camadas que casam com um caminho/padrão ("Universo */Órbita*"): uma
+// linha por nó com caminho, id e tamanho. Descobre nomes sem ler a árvore toda.
+async function locate(pattern, max) {
+  var nodes = await find(pattern);
+  var lines = nodes.slice(0, max || 60).map(function (n) {
+    var p = [];
+    for (var c = n; c && c.type !== 'PAGE'; c = c.parent) p.unshift(c.name);
+    return p.join('/') + ' ' + n.id + ' ' + n.type + ('width' in n ? ' ' + Math.round(n.width) + 'x' + Math.round(n.height) : '');
+  });
+  if (nodes.length > lines.length) lines.push('… +' + (nodes.length - lines.length) + ' nós');
+  return lines.join(NL) || 'nada casa com ' + pattern;
+}
+
+return { v: V, build: build, edit: edit, variant: variant, link: link, locate: locate, catalog: catalog, reindex: reindex, inspect: inspect, component: component };
 
 })(figma);
 
@@ -1091,6 +1104,7 @@ HANDLERS.status = async function () {
 };
 
 HANDLERS.tree = async function (a) {
+  if (a.find) return LITE.locate(a.find, a.max);
   let root;
   if (a.id) root = await nodeOrThrow(a.id);
   else root = figma.currentPage.selection[0] || figma.currentPage;

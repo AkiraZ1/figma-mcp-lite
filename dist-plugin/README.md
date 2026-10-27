@@ -42,6 +42,26 @@ O Claude delega pro `figma-lite`, que:
 3. confere com um print;
 4. devolve o id do frame e os avisos.
 
+## Ferramentas (lote primeiro)
+
+Toda ferramenta que mexe em mais de um item aceita uma lista numa chamada só. Item que falhar volta nos avisos e o resto segue.
+
+| Ferramenta | Pra quê | Lote |
+|---|---|---|
+| `figma_status` | arquivo, página, seleção | — |
+| `figma_ds` | catálogo do design system (variáveis, estilos, componentes) | filtro com vários grupos |
+| `figma_build` | telas inteiras por spec JSON (frame, texto, instância, rect, ellipse, scatter, svg, path, imagem, pincel, animação) | `specs` |
+| `figma_variant` | telas que repetem estrutura: clona e aplica patches por nome de camada | `variants` |
+| `figma_edit` | ajustes, motion, pincel, imagem, por id ou caminho com curinga (`"Universo */Titulo"`) | `items` |
+| `figma_link` | protótipo (clique, hover, delay; Smart Animate, dissolve, push) | `links` |
+| `figma_component` | componente, variantes, propriedades | `items` |
+| `figma_inspect` | lê frames pra virar código, com o nome do token de cada valor | `ids` |
+| `figma_tree` | estrutura; `find` lista camadas por padrão | — |
+| `figma_shot` | print pra conferir | `ids` |
+| `figma_help` | documentação de um recurso, só quando for usar | `"anim,draw"` |
+
+Exemplos de cada uma: [EXAMPLES.md](https://github.com/AkiraZ1/figma-mcp-lite/blob/main/EXAMPLES.md). Animação (Motion) depende de a Figma ter liberado o recurso na conta.
+
 ## No chat do claude.ai
 
 No chat (navegador ou app, fora do Cowork) não existe servidor local. O plugin traz a skill **figma-lite**, que faz o mesmo trabalho pelo conector oficial **Figma** do claude.ai: liga o conector em Configurações → Conectores e pede normalmente com o link do arquivo. Na primeira vez em cada arquivo ela instala o builder (~4k tokens), e depois cada tela é uma chamada curta. Não tem print de conferência e é mais lento que o plugin local.
