@@ -887,9 +887,10 @@ async function edit(ref, patch) {
     for (var j = 0; j < nodes.length; j++) {
       var pt = {};
       Object.keys(it.patch || {}).forEach(function (k) { pt[k] = it.patch[k]; });
-      await editNode(b, nodes[j], pt);
-      done++;
-      last = nodes[j];
+      // Cada item isolado: o que falhar vai pros avisos (pra refazer só ele) e
+      // o resto do lote segue.
+      try { await editNode(b, nodes[j], pt); done++; last = nodes[j]; }
+      catch (e) { b.w('falhou ' + (it.id || it.path) + ' (' + nodes[j].name + '): ' + ((e && e.message) || e)); }
     }
   }
   var out = { v: V, edited: done };
@@ -939,8 +940,8 @@ async function variant(srcRef, o) {
     for (var j = 0; j < nodes.length; j++) {
       var pt = {};
       Object.keys(patches[k]).forEach(function (x) { pt[x] = patches[k][x]; });
-      await editNode(b, nodes[j], pt);
-      done++;
+      try { await editNode(b, nodes[j], pt); done++; }
+      catch (e) { b.w('falhou ' + k + ': ' + ((e && e.message) || e)); }
     }
   }
   var out = { v: V, id: copy.id, name: copy.name, patched: done, x: Math.round(copy.x), y: Math.round(copy.y) };
@@ -967,8 +968,10 @@ async function link(list) {
     var transition = anim === 'instant' ? null : { type: TRANSITION[anim] || 'SMART_ANIMATE', easing: { type: String(l.easing || 'EASE_OUT').toUpperCase() }, duration: l.duration === undefined ? 0.4 : l.duration };
     if (transition && transition.type !== 'SMART_ANIMATE' && transition.type !== 'DISSOLVE') { transition.direction = String(l.direction || 'LEFT').toUpperCase(); transition.matchLayers = false; }
     var keep = (from.reactions || []).filter(function (r) { return !r.trigger || r.trigger.type !== trigger.type; });
-    await from.setReactionsAsync(keep.concat([{ trigger: trigger, actions: [{ type: 'NODE', destinationId: to.id, navigation: 'NAVIGATE', transition: transition, resetScrollPosition: true }] }]));
-    done++;
+    try {
+      await from.setReactionsAsync(keep.concat([{ trigger: trigger, actions: [{ type: 'NODE', destinationId: to.id, navigation: 'NAVIGATE', transition: transition, resetScrollPosition: true }] }]));
+      done++;
+    } catch (e) { b.w('falhou link ' + l.from + ' → ' + l.to + ': ' + ((e && e.message) || e)); }
   }
   var out = { v: V, linked: done };
   if (b.warn.length) out.warn = b.warn;

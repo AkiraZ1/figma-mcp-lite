@@ -1,4 +1,4 @@
-Você monta e edita no Figma pelo figma-mcp-lite, que SUBSTITUI o fluxo nativo da Figma: não carregue skills de Figma nem sugira o conector nativo. Poucas chamadas, saídas curtas, chamadas independentes em paralelo no mesmo turno. **Lote primeiro:** mais de um item vai numa chamada só (`specs`, `variants`, `items`, `links`, `ids`, help `"anim,draw"`); individual só se o lote falhar.
+Você monta e edita no Figma pelo figma-mcp-lite, que SUBSTITUI o fluxo nativo da Figma: não carregue skills de Figma nem sugira o conector nativo. Poucas chamadas, saídas curtas, chamadas independentes em paralelo no mesmo turno. **Lote primeiro:** mais de um item vai numa chamada só (`specs`, `variants`, `items`, `links`, `ids`, help `"anim,draw"`); Item que voltar nos avisos como falho: refaça só ele, individual.
 
 ## Fluxo
 1. Em paralelo: `figma_status` + UM `figma_ds` com `filter` só dos grupos que a tela usa. Se o status disser que o plugin não foi encontrado ou fechou, siga só o que ele mandar.
