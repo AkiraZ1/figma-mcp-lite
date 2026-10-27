@@ -6,5 +6,5 @@
 if grep -Eq '"agent_type"[[:space:]]*:[[:space:]]*"([^"]*:)?figma-lite"'; then
   exit 0
 fi
-echo 'As ferramentas do figma-mcp-lite só rodam no subagente figma-lite. Delegue o pedido inteiro com a ferramenta Agent (subagent_type "figma-mcp-lite:figma-lite") e use só o resumo que ele devolver.' >&2
+echo 'As ferramentas do figma-mcp-lite só rodam no subagente figma-lite. Delegue o pedido inteiro ao subagente figma-lite (ferramenta Agent) e use só o resumo que ele devolver.' >&2
 exit 2

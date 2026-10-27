@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "mcp__plugin_figma-mcp-lite_lite__.*",
+        "matcher": "mcp__plugin_[^_]+_lite__.*",
         "hooks": [
           {
             "type": "command",

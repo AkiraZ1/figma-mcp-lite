@@ -3,6 +3,7 @@
 //   .claude-plugin/plugin.json   manifesto
 //   agents/figma-lite.md         subagente Sonnet (único que pode usar as ferramentas)
 //   .mcp.json + hooks/           servidor do plugin + hook que barra uso fora do subagente
+//   server/start.sh              lançador: acha um Node 20+ e roda o servidor
 //   server/server.mjs            servidor MCP sem dependências (só módulos do Node)
 //   server/remote.js             builder minificado pro modo remoto
 //   README.md
@@ -21,7 +22,7 @@ execFileSync(process.execPath, [path.join(ROOT, 'scripts/bundle.js')], { stdio: 
 fs.rmSync(OUT, { recursive: true, force: true });
 
 write('.claude-plugin/plugin.json', JSON.stringify({
-  name: 'figma-mcp-lite',
+  name: 'figma-mcp-lite', // = PLUGIN abaixo
   version: pkg.version,
   description: 'Telas no Figma gastando ~10x menos contexto que o MCP nativo: subagente Sonnet, spec JSON numa chamada só e as variáveis do design system das bibliotecas do próprio arquivo.',
   author: { name: 'Jemerson Barros', email: 'jemersonbarros@gmail.com' },
@@ -50,8 +51,14 @@ const prompt = fs.readFileSync(path.join(ROOT, 'agents/prompt.md'), 'utf8').repl
 // Agente de plugin não pode declarar MCP próprio (o Claude Code ignora
 // mcpServers nele): o servidor vem do .mcp.json do plugin e o hook
 // only-subagent recusa as ferramentas fora do subagente figma-lite.
+// type explícito: houve caso (plugin entregue pela biblioteca da org no Claude
+// Desktop) em que o app tentou executar "stdio" como comando. O lançador acha o
+// Node fora do PATH do app (Finder no macOS não herda o PATH do shell).
+copy('server/start.sh', 'server/start.sh');
+fs.chmodSync(path.join(OUT, 'server/start.sh'), 0o755);
 write('.mcp.json', JSON.stringify({ mcpServers: { lite: {
-  command: 'node', args: ['${CLAUDE_PLUGIN_ROOT}/server/server.mjs'],
+  type: 'stdio',
+  command: '${CLAUDE_PLUGIN_ROOT}/server/start.sh', args: [],
   // A trava do próprio servidor (pedir subagent_model) é pra cliente sem hook;
   // aqui o hook já garante o subagente.
   env: { FIGMA_LITE_SUBAGENT: 'claude-code-plugin' },
@@ -59,16 +66,18 @@ write('.mcp.json', JSON.stringify({ mcpServers: { lite: {
 copy('hooks/only-subagent.sh', 'hooks/only-subagent.sh');
 fs.chmodSync(path.join(OUT, 'hooks/only-subagent.sh'), 0o755);
 write('hooks/hooks.json', JSON.stringify({ hooks: { PreToolUse: [{
-  matcher: 'mcp__plugin_figma-mcp-lite_lite__.*',
+  // Sem o nome do plugin fixo: forks e cópias locais funcionam sem editar o hook.
+  matcher: 'mcp__plugin_[^_]+_lite__.*',
   hooks: [{ type: 'command', command: '"${CLAUDE_PLUGIN_ROOT}/hooks/only-subagent.sh"' }],
 }] } }, null, 2) + '\n');
 
+const PLUGIN = 'figma-mcp-lite'; // forks: troque aqui e em plugin.json/marketplace.json
 const TOOLS = ['figma_ds', 'figma_lite_install', 'figma_status', 'figma_build', 'figma_edit', 'figma_tree', 'figma_shot'];
 write('agents/figma-lite.md', `---
 name: figma-lite
 description: Use para QUALQUER tarefa no Figma (criar ou editar tela, componente, layout, ler o design system de um arquivo). É o único caminho pro Figma: a conversa principal não pode usar as ferramentas do figma-mcp-lite. Passe o pedido completo (tela, conteúdo, estados e o link do arquivo) numa mensagem só.
 model: sonnet
-tools: mcp__claude_ai_Figma__use_figma, mcp__claude_ai_Figma__search_design_system, ${TOOLS.map((t) => `mcp__plugin_figma-mcp-lite_lite__${t}`).join(', ')}, Read
+tools: mcp__claude_ai_Figma__use_figma, mcp__claude_ai_Figma__search_design_system, ${TOOLS.map((t) => `mcp__plugin_${PLUGIN}_lite__${t}`).join(', ')}, Read
 ---
 
 ${prompt}`);

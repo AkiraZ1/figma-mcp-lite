@@ -51,7 +51,9 @@ function rgbToHex(c) {
 }
 
 function brief(n) {
-  return { id: n.id, type: n.type, name: n.name };
+  const b = { id: n.id, type: n.type, name: n.name };
+  if ('x' in n) { b.x = Math.round(n.x); b.y = Math.round(n.y); }
+  return b;
 }
 
 async function nodeOrThrow(id) {
@@ -70,7 +72,7 @@ const LITE = (function (figma) {
 // setPluginData, loadAllPagesAsync nem fetch; sem crase nem "${" no fonte
 // (a instalação embrulha o código minificado em String.raw).
 
-var V = '0.4.4';
+var V = '0.4.5';
 var NS = 'lite';
 var ALIGN = { start: 'MIN', center: 'CENTER', end: 'MAX', between: 'SPACE_BETWEEN', baseline: 'BASELINE' };
 var WEIGHT = { 100: 'Thin', 200: 'Extra Light', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semi Bold', 700: 'Bold', 800: 'Extra Bold', 900: 'Black' };
@@ -198,7 +200,7 @@ function firstSentence(d) {
 }
 
 async function scan() {
-  var cat = { vars: [], styles: [], comps: [] };
+  var cat = { vars: [], styles: [], comps: [], skipped: [] };
   var probe = figma.createFrame();
   try {
     var cols = await figma.variables.getLocalVariableCollectionsAsync();
@@ -241,11 +243,19 @@ async function scan() {
     var owner = set || node;
     if (seen[owner.key]) return;
     seen[owner.key] = 1;
-    var defs = owner.componentPropertyDefinitions || {};
-    var props = Object.keys(defs).map(function (k) {
-      var d = defs[k];
-      return k.split('#')[0] + (d.type === 'VARIANT' ? '=' + d.variantOptions.join('|') : '(' + d.type.toLowerCase() + ')');
-    });
+    // Component set com erro (variantes conflitando etc.) faz a API lançar
+    // exceção: pula só ele e conta no catálogo, sem derrubar o resto.
+    var props = [];
+    try {
+      var defs = owner.componentPropertyDefinitions || {};
+      props = Object.keys(defs).map(function (k) {
+        var d = defs[k];
+        return k.split('#')[0] + (d.type === 'VARIANT' ? '=' + d.variantOptions.join('|') : '(' + d.type.toLowerCase() + ')');
+      });
+    } catch (e) {
+      cat.skipped.push(owner.name + ' (' + owner.id + '): ' + String((e && e.message) || e).replace(/^in \w+: /, ''));
+      return;
+    }
     cat.comps.push(owner.name + (lib ? ' [lib]' : '') + ' · ref ' + owner.key + (props.length ? ' · ' + props.join(', ') : ''));
   };
   for (var p = 0; p < figma.root.children.length && cat.comps.length < 300; p++) {
@@ -257,7 +267,8 @@ async function scan() {
     });
     var insts = page.findAllWithCriteria({ types: ['INSTANCE'] }).slice(0, 1500);
     for (var q = 0; q < insts.length; q++) {
-      var main = await insts[q].getMainComponentAsync();
+      var main = null;
+      try { main = await insts[q].getMainComponentAsync(); } catch (e) { continue; }
       if (main && main.remote) describe(main, true);
     }
   }
@@ -324,6 +335,7 @@ function fmtCatalog(cat, filter) {
   if (st.length) out.push('## Estilos\n' + st.join('\n'));
   var cp = cat.comps.filter(keep);
   if (cp.length) out.push('## Componentes (inst: nome ou ref)\n' + cp.join('\n'));
+  if (cat.skipped && cat.skipped.length) out.push('## Componentes pulados (com erro no Figma; corrija e rode refresh)\n' + cat.skipped.join('\n'));
   return out.join('\n') || 'nada no catálogo com esse filtro';
 }
 
@@ -569,6 +581,13 @@ async function build(spec, parentId) {
   var b = new Builder();
   var parent = parentId ? await figma.getNodeByIdAsync(parentId) : null;
   if (parentId && !parent) throw new Error('nó pai não encontrado: ' + parentId);
+  // Link com node-id de página: cria na raiz dessa página (ao lado do que existe).
+  var onPage = null;
+  if (parent && parent.type === 'PAGE') {
+    onPage = parent.name;
+    if (parent !== figma.currentPage) await figma.setCurrentPageAsync(parent);
+    parent = null;
+  }
   var root = await b.node(spec, parent);
   if (!root) throw new Error('nada criado: ' + b.warn.join('; '));
   if (!parent && spec.x === undefined) {
@@ -579,7 +598,8 @@ async function build(spec, parentId) {
     root.y = 0;
   }
   try { figma.currentPage.selection = [root]; figma.viewport.scrollAndZoomIntoView([root]); } catch (e) { /* sem viewport no remoto */ }
-  var out = { v: V, id: root.id, nodes: b.count, size: Math.round(root.width) + 'x' + Math.round(root.height) };
+  var out = { v: V, id: root.id, nodes: b.count, size: Math.round(root.width) + 'x' + Math.round(root.height), x: Math.round(root.x), y: Math.round(root.y) };
+  if (onPage) out.page = onPage + ' (o id informado era a página: criado na raiz dela)';
   if (b.warn.length) out.warn = b.warn;
   return out;
 }
@@ -624,7 +644,7 @@ async function edit(id, patch) {
     if (patch.index !== undefined) dest.insertChild(patch.index, node); else dest.appendChild(node);
   }
   await b.size(node, patch, node.parent);
-  var out = { v: V, id: node.id, size: Math.round(node.width) + 'x' + Math.round(node.height) };
+  var out = { v: V, id: node.id, size: Math.round(node.width) + 'x' + Math.round(node.height), x: Math.round(node.x), y: Math.round(node.y) };
   if (b.warn.length) out.warn = b.warn;
   return out;
 }
@@ -657,7 +677,7 @@ HANDLERS.tree = async function (a) {
   (function walk(n, d) {
     if (lines.length >= max) return;
     let line = '  '.repeat(d) + n.type + ' ' + n.id + ' "' + n.name + '"';
-    if ('width' in n) line += ' ' + Math.round(n.width) + 'x' + Math.round(n.height);
+    if ('width' in n) line += ' ' + Math.round(n.width) + 'x' + Math.round(n.height) + ' @' + Math.round(n.x) + ',' + Math.round(n.y);
     if (n.type === 'TEXT') line += ' «' + n.characters.slice(0, 40) + '»';
     lines.push(line);
     if (d < a.depth && 'children' in n) {
@@ -675,6 +695,13 @@ HANDLERS.edit = async function (a) { return LITE.edit(a.id, a.patch || {}); };
 
 HANDLERS.shot = async function (a) {
   const n = await nodeOrThrow(a.id);
+  // A API do Figma não exporta página: devolve os frames de primeiro nível pra
+  // escolher um, em vez do erro de "constraint".
+  if (n.type === 'PAGE' || n.type === 'DOCUMENT') {
+    const tops = (n.type === 'PAGE' ? n.children : figma.currentPage.children).slice(0, 20)
+      .map(function (c) { return c.id + ' "' + c.name + '" @' + Math.round(c.x) + ',' + Math.round(c.y); });
+    throw new Error('print de página não existe na API do Figma; passe o id de um frame. Frames na página: ' + (tops.join('; ') || 'nenhum'));
+  }
   const bytes = await n.exportAsync({ format: 'PNG', constraint: { type: 'WIDTH', value: Math.min(a.width, Math.round(n.width * 2)) } });
   return figma.base64Encode(bytes);
 };

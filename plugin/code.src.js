@@ -50,7 +50,9 @@ function rgbToHex(c) {
 }
 
 function brief(n) {
-  return { id: n.id, type: n.type, name: n.name };
+  const b = { id: n.id, type: n.type, name: n.name };
+  if ('x' in n) { b.x = Math.round(n.x); b.y = Math.round(n.y); }
+  return b;
 }
 
 async function nodeOrThrow(id) {
@@ -88,7 +90,7 @@ HANDLERS.tree = async function (a) {
   (function walk(n, d) {
     if (lines.length >= max) return;
     let line = '  '.repeat(d) + n.type + ' ' + n.id + ' "' + n.name + '"';
-    if ('width' in n) line += ' ' + Math.round(n.width) + 'x' + Math.round(n.height);
+    if ('width' in n) line += ' ' + Math.round(n.width) + 'x' + Math.round(n.height) + ' @' + Math.round(n.x) + ',' + Math.round(n.y);
     if (n.type === 'TEXT') line += ' «' + n.characters.slice(0, 40) + '»';
     lines.push(line);
     if (d < a.depth && 'children' in n) {
@@ -106,6 +108,13 @@ HANDLERS.edit = async function (a) { return LITE.edit(a.id, a.patch || {}); };
 
 HANDLERS.shot = async function (a) {
   const n = await nodeOrThrow(a.id);
+  // A API do Figma não exporta página: devolve os frames de primeiro nível pra
+  // escolher um, em vez do erro de "constraint".
+  if (n.type === 'PAGE' || n.type === 'DOCUMENT') {
+    const tops = (n.type === 'PAGE' ? n.children : figma.currentPage.children).slice(0, 20)
+      .map(function (c) { return c.id + ' "' + c.name + '" @' + Math.round(c.x) + ',' + Math.round(c.y); });
+    throw new Error('print de página não existe na API do Figma; passe o id de um frame. Frames na página: ' + (tops.join('; ') || 'nenhum'));
+  }
   const bytes = await n.exportAsync({ format: 'PNG', constraint: { type: 'WIDTH', value: Math.min(a.width, Math.round(n.width * 2)) } });
   return figma.base64Encode(bytes);
 };
