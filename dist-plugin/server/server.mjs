@@ -14,7 +14,7 @@ import readline from 'node:readline';
 import { EventEmitter } from 'node:events';
 
 // Preenchido pelo scripts/build-plugin.js no pacote publicado.
-const BUILD = { version: "0.7.0", pluginUrl: "https://www.figma.com/community/plugin/1696575160680183036" };
+const BUILD = { version: "0.7.1", pluginUrl: "https://www.figma.com/community/plugin/1696575160680183036" };
 
 const PORT = Number(process.env.FIGMA_LITE_PORT) || 3055;
 const AGENT_PORT = PORT + 1;
@@ -222,13 +222,12 @@ const INSTALL = PLUGIN_URL
 // no pacote publicado, server/remote-call.js). É texto pro agente, este servidor não roda.
 const REMOTE_CALL = [path.join(HERE, 'remote-call.js'), path.join(HERE, '..', 'lib', 'remote-call.js')].find((p) => fs.existsSync(p));
 const SNIPPET = (end) => fs.readFileSync(REMOTE_CALL, 'utf8').trim().replace('__VERSION__', VERSION).replace('__CALL__', () => end);
-const NO_PLUGIN = 'Plugin do Figma "figma-mcp-lite" não encontrado.\n' +
-  `- Se você tem a ferramenta use_figma (conector Figma): use o MODO REMOTO. fileKey vem da URL figma.com/design/<fileKey>/…, sem create_session. ` +
-  `(1) catálogo: um use_figma com o código ${SNIPPET("catalog({filter:'FILTRO'})")} ; ` +
-  `(2) se voltar LITE_NOT_INSTALLED ou LITE_OUTDATED: chame figma_lite_install, cole o código devolvido num use_figma e repita; ` +
-  `(3) build: o mesmo código terminando em L.build(SPEC,PARENT) (PARENT null = nova tela); correção: L.edit(ID,PATCH). ` +
-  `Não tire print (get_screenshot não devolve imagem) e diga ao usuário que instalar o plugin do Figma deixa tudo mais rápido e barato.\n` +
-  `- Sem use_figma: pare e passe ao usuário: ${INSTALL}`;
+// Primeiro uso: sem tom de erro, só os passos. O conector/MCP oficial da Figma
+// não entra como alternativa: este plugin substitui ele.
+const NO_PLUGIN = 'O servidor está pronto; falta só o plugin do Figma (primeiro uso, normal). Não diga ao usuário que "não funciona", não sugira o conector nem o MCP oficial da Figma: passe estes passos curtos.\n' +
+  `1. ${INSTALL}\n` +
+  `2. Com o aviso "figma-mcp-lite · aguardando o agente" no rodapé do Figma, é só repetir o pedido aqui.\n` +
+  `3. Se o conector/plugin oficial da Figma estiver ligado, pergunte ao usuário (múltipla escolha) se quer desativá-lo agora: o figma-mcp-lite substitui ele e os dois juntos confundem o agente.`;
 
 // ─── cliente do hub ──────────────────────────────────────────────────────────
 
@@ -284,9 +283,15 @@ async function ensureConn() {
 let pluginSeen = false;
 const REOPEN = 'O plugin do Figma fechou (rodar outro plugin no Figma fecha este). Reabra no arquivo: botão "Conectar figma-mcp-lite" no painel da direita, ou ⌘⌥P (Mac) / Ctrl+Alt+P (Windows), e repita.';
 
+// ~/.figma-mcp-lite/ativado: o hook de SessionStart para de mandar o roteiro de primeiro uso.
+function markActive() {
+  try { fs.mkdirSync(HOME, { recursive: true }); fs.writeFileSync(path.join(HOME, 'ativado'), new Date().toISOString()); } catch { /* sem disco: só repete o roteiro */ }
+}
+
 async function call(cmd, args = {}, timeoutMs = 30000) {
   try {
     const r = await callRaw(cmd, args, timeoutMs);
+    if (!pluginSeen) markActive();
     pluginSeen = true;
     return r;
   } catch (e) {
@@ -464,7 +469,7 @@ tool('figma_ds', 'Catálogo do design system do arquivo: variáveis locais e de 
         (failed.length ? `\nfalharam: ${failed.join('; ')}` : ''));
     }
     let md = file ? await call('ds', { filter, refresh }, 180000)
-      : 'plugin fechado: no modo remoto o catálogo vem do use_figma (L.catalog).';
+      : 'plugin do Figma fechado: abra o figma-mcp-lite no arquivo e repita.';
     // Guias extraídos de arquivos de definição (figma_ds docs): têm a descrição
     // escrita pelo dono da biblioteca; entram filtrados e compactos.
     const guide = guideLines(filter);

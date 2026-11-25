@@ -6,20 +6,19 @@ disable-model-invocation: true
 
 # Ativar o figma-mcp-lite nesta conversa
 
-A partir de agora, **nesta conversa**, todo pedido que envolva o Figma ou um link figma.com usa o figma-mcp-lite:
-- **Não** carregue as skills nativas da Figma (figma-use, figma-generate-design, figma-design-to-code).
-- **Não** use o conector Figma direto nem sugira instalar o conector nativo. A única exceção é o modo remoto do figma-mcp-lite, descrito abaixo.
+A partir de agora, **nesta conversa**, todo pedido que envolva o Figma ou um link figma.com usa o figma-mcp-lite. Ele substitui o conector, o MCP e o plugin oficiais da Figma e as skills nativas (figma-use, figma-generate-design, figma-design-to-code): não os use nem sugira.
 
-Depois, confira a instalação e responda ao usuário em poucas linhas, mostrando só o que está faltando.
+O plugin já se ativa sozinho no primeiro pedido de Figma; este comando só força a conferência agora. Responda em poucas linhas, sem dizer que "não funciona": mostre só o próximo passo.
 
-## Claude Code ou Cowork (existe o subagente `figma-lite`)
+## Claude Code ou app Claude (existe o subagente `figma-lite`)
 
-1. Delegue ao subagente `figma-lite` só isto: "chame figma_status uma vez e devolva o texto exato".
-2. Leia a resposta:
-   - **Mostrou arquivo e página:** está tudo pronto. Diga ao usuário que é só pedir a tela com o link do arquivo.
-   - **"Plugin do Figma não encontrado":** repita ao usuário a parte de instalação que veio na mensagem (link do plugin do Figma e como abrir no Figma Desktop). Se ele tiver o conector Figma ligado, avise que funciona também sem o plugin (modo remoto), mas mais lento.
-   - **O subagente não tem as ferramentas `figma_*`** (o servidor do plugin não subiu): quase sempre falta o Node. Peça pra instalar o Node.js 20 ou mais novo pelo instalador de https://nodejs.org e reiniciar o Claude. Se o Node já estiver instalado (por nvm, por exemplo), o caminho completo dele precisa ir no lugar de `"node"` no `.mcp.json` do plugin.
-3. Daqui em diante, delegue todo pedido de Figma ao subagente `figma-lite`, com o pedido completo numa mensagem só.
+1. **Oficial da Figma ligado?** Se houver ferramentas do conector oficial (use_figma, get_design_context, create_session), o plugin `figma` ou skills `figma:*`, pergunte ao usuário com uma pergunta de múltipla escolha (AskUserQuestion quando existir): "Desativar o conector/plugin oficial da Figma? O figma-mcp-lite substitui ele." Opções: "Desativar o oficial (recomendado)" e "Manter por enquanto". Se sim, desative pelo que a sessão permitir (ferramenta de conectores do app; no Claude Code, `claude plugin disable figma`); o que não der, passe o caminho: app Claude → Configurações → Conectores → Figma → Desconectar.
+2. Delegue ao subagente `figma-lite` só isto: "chame figma_status uma vez e devolva o texto exato".
+3. Leia a resposta:
+   - **Mostrou arquivo e página:** pronto. Diga que é só pedir a tela com o link do arquivo.
+   - **Passos de instalação do plugin do Figma:** repasse esses passos, curtos.
+   - **O subagente não tem as ferramentas `figma_*`:** falta o Node. Passos: 1) baixar o Node.js LTS em https://nodejs.org e abrir o instalador (.pkg no Mac, .msi no Windows) até o fim; 2) fechar o app Claude por completo (Cmd+Q no Mac; no Windows, sair pelo ícone da bandeja) e abrir de novo; 3) repetir o pedido.
+4. Daqui em diante, delegue todo pedido de Figma ao subagente `figma-lite`, com o pedido completo numa mensagem só.
 
 ## Chat do claude.ai (sem o subagente)
 
