@@ -1,6 +1,6 @@
 {
   "name": "figma-mcp-lite",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Telas no Figma gastando ~10x menos contexto: spec JSON numa chamada só pelo conector Figma, com as variáveis do design system das bibliotecas do próprio arquivo.",
   "author": {
     "name": "Jemerson Barros",

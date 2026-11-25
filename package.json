@@ -1,7 +1,7 @@
 {
   "name": "figma-mcp-lite",
-  "version": "0.7.2",
-  "description": "MCP enxuto pro Figma: plugin local + subagente obrigat\u00f3rio, feito pra gastar pouco token",
+  "version": "0.7.3",
+  "description": "MCP enxuto pro Figma: plugin local + subagente obrigatório, feito pra gastar pouco token",
   "type": "module",
   "bin": {
     "figma-mcp-lite": "src/server.js"

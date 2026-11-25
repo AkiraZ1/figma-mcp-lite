@@ -1,7 +1,7 @@
-// figma-mcp-lite 0.7.2: instala o builder (lib/builder.js) no arquivo aberto.
+// figma-mcp-lite 0.7.3: instala o builder (lib/builder.js) no arquivo aberto.
 // O texto abaixo fica guardado no arquivo (sharedPluginData "lite"/"lib") e é conferido por hash.
 const s = String.raw`var L = function(figma) {
-  var V = "0.7.2";
+  var V = "0.7.3";
   var NS = "lite";
   var NL = [10].map(function(c) {
     return String.fromCharCode(c);
@@ -1266,6 +1266,6 @@ const s = String.raw`var L = function(figma) {
 };`;
 let h = 0;
 for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-if (h !== -332667601) return { erro: 'cópia corrompida (' + s.length + ' de 50797 caracteres): chame a instalação de novo e cole o código sem alterar nada' };
+if (h !== -1871273586) return { erro: 'cópia corrompida (' + s.length + ' de 50797 caracteres): chame a instalação de novo e cole o código sem alterar nada' };
 figma.root.setSharedPluginData('lite', 'lib', s);
 return { v: new Function(s + ';return L')()(figma).v, len: s.length };

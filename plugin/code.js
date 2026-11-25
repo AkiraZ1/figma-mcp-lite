@@ -95,7 +95,7 @@ const LITE = (function (figma) {
 // setPluginData, loadAllPagesAsync nem fetch; sem crase nem "${" no fonte
 // (a instalação embrulha o código minificado em String.raw).
 
-var V = '0.7.2';
+var V = '0.7.3';
 var NS = 'lite';
 // Sem barra invertida no fonte: a instalação remota é copiada pelo modelo,
 // e barras são o que ele mais erra ao escapar. Daí o NL e nada de regex com \.
