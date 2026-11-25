@@ -14,7 +14,7 @@ import readline from 'node:readline';
 import { EventEmitter } from 'node:events';
 
 // Preenchido pelo scripts/build-plugin.js no pacote publicado.
-const BUILD = { version: "0.6.0", pluginUrl: "https://www.figma.com/community/plugin/1696575160680183036" };
+const BUILD = { version: "0.7.0", pluginUrl: "https://www.figma.com/community/plugin/1696575160680183036" };
 
 const PORT = Number(process.env.FIGMA_LITE_PORT) || 3055;
 const AGENT_PORT = PORT + 1;
@@ -185,15 +185,15 @@ function becomeHub() {
 
   const onPlugin = (ws, req) => {
     // Página web no navegador manda Origin; o iframe do plugin manda "null".
-    // Qualquer outra origem é site tentando rodar código no teu Figma: fora.
+    // Qualquer outra origem é site tentando mandar comandos pro teu Figma: fora.
     const origin = req.headers.origin;
     if (origin && origin !== 'null') return ws.close(1008);
     ws.on('message', (raw) => onMessage(ws, raw));
     ws.on('close', () => onClose(ws));
   };
 
-  // Só loopback (IPv4 e IPv6), nunca todas as interfaces: o hub executa código
-  // no Figma, não pode ficar exposto na rede.
+  // Só loopback (IPv4 e IPv6), nunca todas as interfaces: o hub manda comandos
+  // pro Figma, não pode ficar exposto na rede.
   return listenWs('127.0.0.1', onPlugin).then(async (v4) => {
     if (!v4) return false;
     await listenWs('::1', onPlugin);
@@ -218,7 +218,10 @@ const MANIFEST = [path.join(HERE, '..', 'plugin-dev', 'manifest.json'), path.joi
 const INSTALL = PLUGIN_URL
   ? `Instale uma vez: ${PLUGIN_URL} . Depois, no Figma Desktop, abra o arquivo e rode Plugins → figma-mcp-lite (ou o atalho do último plugin: ⌘⌥P no Mac, Ctrl+Alt+P no Windows, ou o botão "Conectar figma-mcp-lite" no painel da direita, que aparece nos arquivos onde ele já rodou). Ele fica em segundo plano, com um aviso no rodapé.`
   : `Instale uma vez no Figma Desktop: Plugins → Development → Import plugin from manifest → ${MANIFEST || 'plugin-dev/manifest.json'} . Depois abra o arquivo e rode Plugins → Development → figma-mcp-lite: ele fica em segundo plano, com um aviso no rodapé.`;
-const SNIPPET = (end) => `const s=figma.root.getSharedPluginData('lite','lib');if(!s)return'LITE_NOT_INSTALLED';const L=new Function(s+';return L')()(figma);if(L.v!=='${VERSION}')return'LITE_OUTDATED '+L.v;return await L.${end}`;
+// Modelo do código que o agente cola no use_figma no modo remoto (lib/remote-call.js;
+// no pacote publicado, server/remote-call.js). É texto pro agente, este servidor não roda.
+const REMOTE_CALL = [path.join(HERE, 'remote-call.js'), path.join(HERE, '..', 'lib', 'remote-call.js')].find((p) => fs.existsSync(p));
+const SNIPPET = (end) => fs.readFileSync(REMOTE_CALL, 'utf8').trim().replace('__VERSION__', VERSION).replace('__CALL__', () => end);
 const NO_PLUGIN = 'Plugin do Figma "figma-mcp-lite" não encontrado.\n' +
   `- Se você tem a ferramenta use_figma (conector Figma): use o MODO REMOTO. fileKey vem da URL figma.com/design/<fileKey>/…, sem create_session. ` +
   `(1) catálogo: um use_figma com o código ${SNIPPET("catalog({filter:'FILTRO'})")} ; ` +
@@ -355,7 +358,7 @@ function distill(raw) {
   for (let i = 0; i < lines.length; i++) {
     // Coleção com "_" ou "primit" no nome é camada bruta: só serve pra resolver alias.
     if (lines[i].startsWith('## ')) { primitive = /^## Coleção (_|.*primit)/i.test(lines[i]); continue; }
-    const m = /^([^#\s][^=]*?) = (.+)$/.exec(lines[i]);
+    const m = lines[i].match(/^([^#\s][^=]*?) = (.+)$/);
     if (!m) continue;
     const hidden = primitive || m[2].endsWith(' [oculto]');
     const desc = lines[i + 1] && lines[i + 1].startsWith('  ') ? lines[i + 1].trim() : '';
@@ -406,7 +409,7 @@ function distill(raw) {
     const vals = v.vals.map((x, i) => fmtVal(resolve(x, i)));
     const val = vals.every((x) => x === vals[0]) ? vals[0] : vals.join('|');
     // Papel tipográfico: 4–5 variáveis que sempre andam juntas viram uma linha.
-    const m = /^text\/(display|heading|body)\/([^/]+)\/(.+)$/.exec(n);
+    const m = n.match(/^text\/(display|heading|body)\/([^/]+)\/(.+)$/);
     if (m) {
       const key = `${m[1]}/${m[2]}`;
       if (!roles[key]) { roles[key] = []; out.push({ role: key }); }
@@ -473,7 +476,7 @@ tool('figma_ds', 'Catálogo do design system do arquivo: variáveis locais e de 
 // diz o papel do token. O dark e o resto da descrição só com detail.
 function compact(md) {
   return md.split('\n').map((l) => {
-    const m = /^(\$\S+) (\S+?)(?:\|\S+)? · (.*)$/.exec(l);
+    const m = l.match(/^(\$\S+) (\S+?)(?:\|\S+)? · (.*)$/);
     if (!m) return l;
     let d = m[3].split(/(?<=\.)\s/)[0].replace(/\.$/, '');
     if (d.length > 80) d = d.slice(0, 78) + '…';
@@ -522,11 +525,15 @@ const HELP = {
   draw: `Desenho (Figma Draw), em LOTE num figma_edit: {"items":[{"path":"Universo */Órbita 1","patch":{"brush":"HEIST"}},{"path":"Universo */Órbita 2","patch":{"dynamic":{"frequency":2,"wiggle":3,"smoothen":0.5}}}]}. Pincéis stretch: HEIST BLOCKBUSTER GRINDHOUSE BIOPIC SPAGHETTI_WESTERN SLASHER HARDBOILED VERITE EPIC SCREWBALL ROM_COM NOIR PROPAGANDA MELODRAMA; scatter: BUBBLEGUM WITCH_HOUSE SHOEGAZE HONKY_TONK SCREAMO DRONE DOO_WOP SPOKEN_WORD VAPORWAVE OI (aceita {"name":…,"gap":1,"wiggle":0}). Vetor novo no build (vários: specs): {"path":"M0 0 C 40 -20 80 20 120 0","n":"Traço","stroke":"#FFF","sw":4,"brush":"BIOPIC"}; texto em caminho no mesmo nó: "onPath":"texto","size":16,"color":"#FFF". Item que falhar volta nos avisos: refaça só ele.`,
   anim: `Animação (Figma Motion; se não estiver liberado na conta, volta aviso), em LOTE num figma_edit: {"items":[{"path":"Universo */Conteudo/Titulo","patch":{"anim":{"keys":{"OPACITY":[[0,0],[0.4,1]],"TRANSLATION_Y":[[0,24],[0.4,0]]}}}},{"path":"Universo */Conteudo/Sub","patch":{"anim":{"keys":{"OPACITY":[[0,0],[0.4,1]]},"delay":0.15}}}]}. keys: OPACITY, TRANSLATION_X/Y/XY, ROTATION, SCALE_X/Y/XY (XY aceita número ou [x,y]), WIDTH, HEIGHT, CORNER_RADIUS; ponto = [t(s), valor, easing?]; easing: EASE_IN, EASE_OUT, EASE_IN_AND_OUT, LINEAR, EASE_OUT_BACK, GENTLE, QUICK, BOUNCY, SLOW, HOLD. Estilo pronto da Figma: {"anim":{"style":"<nome>","dur":0.4}} ("?" lista os nomes nos avisos). "total":1.2 = duração da timeline. Também vale em nós do build. Item que falhar volta nos avisos: refaça só ele.`,
   component: `Componentes — figma_component: {"id":"1:2"} transforma o nó em componente; {"ids":["1:2","1:3"],"n":"Botão"} junta como variantes (nomeie as camadas antes no formato "Tipo=Primário, Tamanho=M" via figma_edit {"n":…}); "props":{"Rótulo":"TEXT:Comprar","Ícone":"BOOLEAN:true"} cria propriedades. Devolve id e ref (use a ref em "inst").`,
+  note: `Anotações (Dev Mode) — figma_edit patch: "note":"texto em **markdown**" soma uma; {"text":"…","cat":"Espaçamento","props":["w","h","gap","pad","fill","r","font","size"]} com categoria (criada se não existir) e medidas mostradas no Dev Mode; lista de várias; "notes":[…] troca todas; "note":false apaga. Também vale na spec do build ("note" no nó). Lote: items [{id, patch:{note}}]. figma_inspect mostra note«…».`,
+  detach: `Desanexar — figma_edit patch "detach":true desanexa a instância (vira frame, id novo devolvido); "detach":"all" desanexa também as instâncias de dentro (vale num frame comum). O resto do patch segue aplicado no nó desanexado.`,
+  pages: `Páginas — figma_pages: lista as páginas na ordem do arquivo (← atual). frames:true lista também os frames de 1º nível de cada página em ordem de leitura (linhas de cima pra baixo, esquerda pra direita). go:"nome|id" abre a página; move:{"page":"nome|id","index":0} reordena.`,
+  run: `Script (opt-in) — figma_run {"code":"…"}: corpo de função async com figma (Plugin API) e lite (o builder); o return volta em JSON curto (nós viram {id,type,name,x,y}). Só funciona se a pessoa liberou em Plugins → figma-mcp-lite → "Permitir/bloquear scripts" (figma_status mostra scripts:true). Use só pro que figma_edit/build não cobrem; bloqueado, peça pra pessoa liberar ou siga sem.`,
   inspect: `Ler pra código — figma_inspect {"id":"1:2","depth":3}: uma linha por nó com tipo, nome, tamanho, posição, layout (row/col, gap, pad, align, sizing), fill/stroke/r e texto (conteúdo, fonte, size, lh), sempre com o NOME da variável quando ligado — use esses nomes como tokens no código.`,
 };
 
-tool('figma_help', 'Documentação de um recurso, só quando for usar: svg (ícones), img (imagens), draw (vetor, pincel, texto em caminho), anim (animação), component (componentes e variantes), inspect (ler pra código). Vários de uma vez: "anim,draw".',
-  { topic: str('svg | img | draw | anim | component | inspect, ou vários separados por vírgula') }, ['topic'],
+tool('figma_help', 'Documentação de um recurso, só quando for usar: svg (ícones), img (imagens), draw (vetor, pincel, texto em caminho), anim (animação), component (componentes e variantes), inspect (ler pra código), note (anotações), detach (desanexar instâncias), pages (ordem das páginas), run (scripts). Vários de uma vez: "anim,draw".',
+  { topic: str('svg | img | draw | anim | component | inspect | note | detach | pages | run, ou vários separados por vírgula') }, ['topic'],
   async ({ topic }) => text(String(topic).split(',').map((t) => t.trim().toLowerCase()).filter(Boolean)
     .map((t) => HELP[t] ? `[${t}] ${HELP[t]}` : `[${t}] não existe; tópicos: ${Object.keys(HELP).join(', ')}`).join('\n')));
 
@@ -562,7 +569,7 @@ tool('figma_build', 'Cria telas/blocos inteiros a partir de spec JSON (formato n
     return text(JSON.stringify(list.length === 1 ? out[0] : out));
   });
 
-tool('figma_edit', 'Correção sem reconstruir. Um nó: id ou path por nomes de camada ("Universo */Conteudo/*": * casa qualquer trecho do nome) + patch com os campos da spec (n, text, type, color, fill, stroke, sw, r, o, w, h, d, gap, pad, align, cross, layout, x, y, img, brush, dynamic, anim; parent+index move; remove:true apaga). Vários: items [{id|path, patch}] numa chamada só.',
+tool('figma_edit', 'Correção sem reconstruir. Um nó: id ou path por nomes de camada ("Universo */Conteudo/*": * casa qualquer trecho do nome) + patch com os campos da spec (n, text, type, color, fill, stroke, sw, r, o, w, h, d, gap, pad, align, cross, layout, x, y, img, brush, dynamic, anim, note, detach; parent+index move; remove:true apaga). Vários: items [{id|path, patch}] numa chamada só.',
   { id: str(), path: str(), patch: { type: 'object' }, items: { type: 'array', items: { type: 'object' } } }, [],
   async ({ id, path: p, patch, items }) => {
     const list = items || [{ id, path: p, patch: typeof patch === 'string' ? JSON.parse(patch) : patch }];
@@ -584,6 +591,14 @@ tool('figma_variant', 'Telas novas clonando outra e aplicando patches por nome d
 tool('figma_link', 'Protótipo: liga telas/nós. links: [{from, to, trigger:"click"|"hover"|"delay", ms, animation:"smart"|"dissolve"|"instant"|"push"|"slide", easing, duration (s)}]. from/to: id ou nome.',
   { links: { type: 'array', items: { type: 'object' } } }, ['links'],
   async ({ links }) => text(JSON.stringify(await call('link', { links }, 60000))));
+
+tool('figma_pages', 'Páginas na ordem do arquivo (frames:true com os frames em ordem de leitura; go abre; move reordena). figma_help pages.',
+  { frames: bool(), go: str(), move: { type: 'object' }, max: num() }, [],
+  async (a) => text(await call('pages', a, 60000)));
+
+tool('figma_run', 'Script na Plugin API, só se a pessoa liberou no menu do plugin (desligado por padrão). Prefira figma_edit/build. figma_help run.',
+  { code: str('corpo de função async (figma, lite) com return'), max_chars: num() }, ['code'],
+  async ({ code, max_chars }) => text(String(await call('run', { code, max: max_chars }, 120000))));
 
 tool('figma_tree', 'Contorno compacto de um nó (tipo, id, nome, tamanho, posição); padrão: seleção ou página. find: só as camadas que casam com um caminho ("Universo */Órbita*"), com caminho e id, pra descobrir nomes numa chamada.',
   { id: str(), find: str(), depth: num(), max_lines: num() }, [],

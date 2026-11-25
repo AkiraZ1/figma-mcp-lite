@@ -7,5 +7,5 @@ Você monta e edita no Figma pelo figma-mcp-lite, que SUBSTITUI o fluxo nativo d
 4. Até 5 linhas: o que foi criado, ids, avisos.
 
 Ajuste: `figma_edit` com `items` (vários nós numa chamada; `path` por nome, `*` casa qualquer trecho: `"Universo */Titulo"`). Nomes de camada: `figma_tree` com `find` ("Tela */Órbita*"). Nunca reconstrua a tela.
-Ícone (svg), imagem (img), desenho/pincel (draw), animação (anim), componentes (component), ler pra código (inspect): `figma_help` do tópico antes de usar, uma vez.
+svg, img, draw, anim, component, inspect, note, detach, pages (`figma_pages`), run (`figma_run`, só se a pessoa liberou): `figma_help` do tópico antes de usar, uma vez.
 

@@ -26,6 +26,20 @@ function showState(state) {
 }
 showState('aguardando o agente');
 
+// Scripts (figma_run) vêm DESLIGADOS: só rodam depois que a pessoa liga no
+// menu do plugin "Permitir/bloquear scripts". Vale por computador (clientStorage).
+let scriptsOn = false;
+const scriptsReady = figma.clientStorage.getAsync('scripts').then(function (v) {
+  scriptsOn = v === true;
+  if (figma.command === 'scripts') {
+    scriptsOn = !scriptsOn;
+    figma.notify(scriptsOn
+      ? 'figma-mcp-lite: scripts PERMITIDOS neste computador (o agente pode rodar código no arquivo). Repita o comando pra bloquear.'
+      : 'figma-mcp-lite: scripts bloqueados neste computador.', { timeout: 6000 });
+    return figma.clientStorage.setAsync('scripts', scriptsOn);
+  }
+}).catch(function () { /* sem clientStorage: fica bloqueado */ });
+
 figma.ui.onmessage = async function (msg) {
   if (msg.state) { showState(msg.state); return; }
   const t0 = Date.now();
@@ -76,6 +90,7 @@ const LITE = (function (figma) {
 const HANDLERS = {};
 
 HANDLERS.status = async function () {
+  await scriptsReady;
   const sel = figma.currentPage.selection;
   return {
     file: figma.root.name,
@@ -83,6 +98,7 @@ HANDLERS.status = async function () {
     page: figma.currentPage.name,
     selection: sel.slice(0, 10).map(brief),
     selectionCount: sel.length,
+    scripts: scriptsOn,
   };
 };
 
@@ -109,12 +125,37 @@ HANDLERS.tree = async function (a) {
   return lines.join('\n');
 };
 
-// Correção pontual: operações estruturadas da lib (sem executar código recebido).
+// Correção pontual: operações estruturadas da lib.
 HANDLERS.edit = async function (a) { return LITE.edit(a.items || a.id || a.path, a.patch || {}); };
 HANDLERS.variant = async function (a) { return LITE.variant(a.source, a); };
 HANDLERS.link = async function (a) { return LITE.link(a.links || a); };
 HANDLERS.inspect = async function (a) { return LITE.inspect(a.id, a.depth === undefined ? 3 : a.depth); };
 HANDLERS.component = async function (a) { return LITE.component(a); };
+HANDLERS.pages = async function (a) { return LITE.pages(a); };
+
+// ─── scripts (opt-in) ───────────────────────────────────────────────────────
+// Só com a chave ligada pela pessoa no menu do plugin. Recebe o corpo de uma
+// função async (figma, lite) e devolve o retorno em JSON curto; nós viram
+// {id, type, name, x, y}.
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+HANDLERS.run = async function (a) {
+  await scriptsReady;
+  if (!scriptsOn) {
+    throw new Error('scripts bloqueados neste computador. Pra liberar, a pessoa abre o menu Plugins → figma-mcp-lite → "Permitir/bloquear scripts" (vale até ser bloqueado de novo). Sem isso, use figma_edit/figma_build.');
+  }
+  const fn = new AsyncFunction('figma', 'lite', String(a.code || ''));
+  const out = await fn(figma, LITE);
+  if (out === undefined) return 'ok';
+  let s = JSON.stringify(out, function (k, v) {
+    if (v && typeof v === 'object' && typeof v.id === 'string' && typeof v.type === 'string' && 'parent' in v) return brief(v);
+    if (typeof v === 'symbol') return 'mixed';
+    return v;
+  });
+  if (s === undefined) s = String(out);
+  const max = a.max || 4000;
+  if (s.length > max) s = s.slice(0, max) + '… (+' + (s.length - max) + ' chars)';
+  return s;
+};
 
 HANDLERS.shot = async function (a) {
   const n = await nodeOrThrow(a.id);

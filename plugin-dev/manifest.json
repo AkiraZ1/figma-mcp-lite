@@ -26,5 +26,15 @@
       "command": "open",
       "name": "Conectar figma-mcp-lite"
     }
+  ],
+  "menu": [
+    {
+      "name": "Conectar ao agente",
+      "command": "open"
+    },
+    {
+      "name": "Permitir/bloquear scripts",
+      "command": "scripts"
+    }
   ]
 }

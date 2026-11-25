@@ -7,6 +7,7 @@
 //   skills/ativar/               /figma-mcp-lite:ativar — ativa nesta conversa e confere a instalação
 //   server/server.mjs            servidor MCP sem dependências (só módulos do Node)
 //   server/install.js            instalação do builder no modo remoto (com trava de integridade)
+//   server/remote-call.js        modelo da chamada do builder no modo remoto (texto pro agente)
 //   README.md
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,6 +45,7 @@ if (!server.includes(BUILD_LINE)) throw new Error('src/server.js sem a linha BUI
 write('server/server.mjs', server.replace(BUILD_LINE,
   `const BUILD = { version: ${JSON.stringify(pkg.version)}, pluginUrl: ${JSON.stringify(pkg.figmaPluginUrl || null)} };`));
 copy('dist/install.js', 'server/install.js');
+copy('lib/remote-call.js', 'server/remote-call.js');
 
 // O plugin do Figma NÃO vai no pacote do Claude: é instalado pela Figma
 // Community (link na mensagem de instalação). Fica em plugin/ no repositório.
@@ -84,7 +86,7 @@ copy('dist/install.js', 'skills/figma-lite/install.js');
 copy('skills/ativar/SKILL.md', 'skills/ativar/SKILL.md');
 
 const PLUGIN = 'figma-mcp-lite'; // forks: troque aqui e em plugin.json/marketplace.json
-const TOOLS = ['figma_ds', 'figma_lite_install', 'figma_status', 'figma_build', 'figma_edit', 'figma_variant', 'figma_link', 'figma_tree', 'figma_shot', 'figma_inspect', 'figma_component', 'figma_help'];
+const TOOLS = ['figma_ds', 'figma_lite_install', 'figma_status', 'figma_build', 'figma_edit', 'figma_variant', 'figma_link', 'figma_tree', 'figma_shot', 'figma_inspect', 'figma_component', 'figma_help', 'figma_pages', 'figma_run'];
 // No Cowork as ferramentas do plugin chegam com o prefixo remote-devices.
 const PREFIXES = [`mcp__plugin_${PLUGIN}_lite__`, `mcp__remote-devices__plugin_${PLUGIN}_lite__`];
 write('agents/figma-lite.md', `---

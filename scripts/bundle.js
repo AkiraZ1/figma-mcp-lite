@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Gera os dois artefatos a partir de lib/builder.js:
 //   plugin/code.js  — plugin local (modo janela), com o builder embutido
-//   dist/remote.js  — builder minificado pro use_figma do MCP oficial (modo remoto)
+//   dist/remote.js  — builder legível pro use_figma do MCP oficial (modo remoto)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,14 +28,16 @@ fs.writeFileSync(path.join(DEV, 'manifest.json'), JSON.stringify(devManifest, nu
 for (const f of ['code.js', 'ui.html']) fs.copyFileSync(path.join(ROOT, 'plugin', f), path.join(DEV, f));
 
 // No remoto o fonte vai embrulhado em String.raw na instalação: sem template
-// literal no minificado, não sobra crase nem "${" pra quebrar o embrulho.
+// literal no código gerado, não sobra crase nem "${" pra quebrar o embrulho.
+// Sem minificar: a revisão do diretório de plugins precisa conseguir ler o
+// código instalado (linha única compactada é recusada como "packed payload").
 const { code } = transformSync(`var L=function(figma){${builder}\n};`, {
-  minify: true, target: 'es2017', supported: { 'template-literal': false }, legalComments: 'none',
+  minify: false, target: 'es2017', supported: { 'template-literal': false }, legalComments: 'none',
   charset: 'utf8', // acentos literais, não \xE1: menos barra invertida pro modelo copiar
 });
-if (/[`]|\$\{/.test(code)) throw new Error('minificado tem crase ou ${ — a instalação via String.raw quebraria');
+if (/[`]|\$\{/.test(code)) throw new Error('builder gerado tem crase ou ${ — a instalação via String.raw quebraria');
 // Barra invertida é o que o modelo mais erra ao copiar o código (escape em JSON).
-if (code.includes('\\')) throw new Error('minificado tem barra invertida: troque por equivalente sem barra em lib/builder.js');
+if (code.includes('\\')) throw new Error('builder gerado tem barra invertida: troque por equivalente sem barra em lib/builder.js');
 fs.mkdirSync(path.join(ROOT, 'dist'), { recursive: true });
 const src = code.trim();
 fs.writeFileSync(path.join(ROOT, 'dist/remote.js'), src);
@@ -46,7 +48,12 @@ fs.writeFileSync(path.join(ROOT, 'dist/remote.js'), src);
 let h = 0;
 for (let i = 0; i < src.length; i++) h = (h * 31 + src.charCodeAt(i)) | 0;
 fs.writeFileSync(path.join(ROOT, 'dist/install.js'),
-  'const s=String.raw`' + src + '`;let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;' +
-  "if(h!==" + h + ")return{erro:'cópia corrompida (' + s.length + ' de " + src.length + " caracteres): chame a instalação de novo e cole o código sem alterar nada'};" +
-  "figma.root.setSharedPluginData('lite','lib',s);return{v:new Function(s+';return L')()(figma).v,len:s.length}\n");
+  '// figma-mcp-lite ' + version + ': instala o builder (lib/builder.js) no arquivo aberto.\n' +
+  '// O texto abaixo fica guardado no arquivo (sharedPluginData "lite"/"lib") e é conferido por hash.\n' +
+  'const s = String.raw`' + src + '`;\n' +
+  'let h = 0;\n' +
+  'for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;\n' +
+  "if (h !== " + h + ") return { erro: 'cópia corrompida (' + s.length + ' de " + src.length + " caracteres): chame a instalação de novo e cole o código sem alterar nada' };\n" +
+  "figma.root.setSharedPluginData('lite', 'lib', s);\n" +
+  "return { v: new Function(s + ';return L')()(figma).v, len: s.length };\n");
 console.log(`v${version}: plugin/code.js ok · dist/remote.js ${code.length} chars (~${Math.round(code.length / 3.5)} tokens pra instalar)`);

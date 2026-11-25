@@ -58,6 +58,8 @@ Toda ferramenta que mexe em mais de um item aceita uma lista numa chamada só. I
 | `figma_inspect` | lê frames pra virar código, com o nome do token de cada valor | `ids` |
 | `figma_tree` | estrutura; `find` lista camadas por padrão | — |
 | `figma_shot` | print pra conferir | `ids` |
+| `figma_pages` | páginas na ordem do arquivo; `frames` em ordem de leitura; `go`/`move` | — |
+| `figma_run` | script na Plugin API — **desligado por padrão**: só roda depois que a pessoa escolhe *Permitir/bloquear scripts* no menu do plugin do Figma (vale por computador) | — |
 | `figma_help` | documentação de um recurso, só quando for usar | `"anim,draw"` |
 
 Exemplos de cada uma: [EXAMPLES.md](https://github.com/AkiraZ1/figma-mcp-lite/blob/main/EXAMPLES.md). Animação (Motion) depende de a Figma ter liberado o recurso na conta.

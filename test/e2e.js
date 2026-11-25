@@ -27,7 +27,9 @@ function fakePlugin(file = 'Arquivo Teste') {
       : m.cmd === 'build' ? { id: '1:2', nodes: 3 }
       : m.cmd === 'variant' ? { id: '1:9', name: m.args.name, patched: Object.keys(m.args.patches || {}).length }
       : m.cmd === 'shot' ? 'iVBORw0KGgo='
-      : m.cmd === 'inspect' ? 'FRAME "' + m.args.id + '" 10x10' : null;
+      : m.cmd === 'inspect' ? 'FRAME "' + m.args.id + '" 10x10'
+      : m.cmd === 'pages' ? '1. 0:1 "Capa" ← atual'
+      : m.cmd === 'run' ? 'code:' + m.args.code : null;
     ws.send(JSON.stringify({ id: m.id, ok: true, result }));
   });
   return new Promise((r) => ws.on('open', () => r(ws)));
@@ -53,7 +55,7 @@ await check('status pelo hub', async () => {
 
 await check('ferramentas e instruções enxutas', async () => {
   const { tools } = await a.listTools();
-  assert.equal(tools.length, 12);
+  assert.equal(tools.length, 14);
   const size = JSON.stringify(tools).length + a.getInstructions().length;
   console.log(`   (schemas + instruções ≈ ${Math.round(size / 4)} tokens)`);
   assert.ok(size < 8000);
@@ -114,11 +116,16 @@ await check('lote: specs, variants, shots e inspect numa chamada cada', async ()
   assert.equal(txt(await b.callTool({ name: 'figma_inspect', arguments: { ids: ['1:2', '1:3'] } })).split('\n').length, 2);
 });
 
+await check('páginas e script repassados ao plugin', async () => {
+  assert.ok(txt(await b.callTool({ name: 'figma_pages', arguments: { frames: true } })).includes('Capa'));
+  assert.equal(txt(await b.callTool({ name: 'figma_run', arguments: { code: 'return 1' } })), 'code:return 1');
+});
+
 await check('orçamento de tokens (quebra se crescer)', async () => {
   const { tools } = await a.listTools();
   const fixed = Math.round((JSON.stringify(tools).length + a.getInstructions().length) / 4);
-  assert.ok(fixed < 1400, `ferramentas + instruções: ${fixed} tokens`);
-  for (const t of ['svg', 'img', 'draw', 'anim', 'component', 'inspect']) {
+  assert.ok(fixed < 1600, `ferramentas + instruções: ${fixed} tokens`);
+  for (const t of ['svg', 'img', 'draw', 'anim', 'component', 'inspect', 'note', 'detach', 'pages', 'run']) {
     const h = txt(await a.callTool({ name: 'figma_help', arguments: { topic: t } }));
     assert.ok(h.length / 4 < 300, `help ${t}: ${Math.round(h.length / 4)} tokens`);
   }
@@ -134,5 +141,5 @@ await check('orçamento de tokens (quebra se crescer)', async () => {
 plugin.close();
 await a.close();
 await b.close();
-console.log(`\n${ok}/10 ok`);
-process.exit(ok === 10 ? 0 : 1);
+console.log(`\n${ok}/11 ok`);
+process.exit(ok === 11 ? 0 : 1);

@@ -27,6 +27,20 @@ function showState(state) {
 }
 showState('aguardando o agente');
 
+// Scripts (figma_run) vêm DESLIGADOS: só rodam depois que a pessoa liga no
+// menu do plugin "Permitir/bloquear scripts". Vale por computador (clientStorage).
+let scriptsOn = false;
+const scriptsReady = figma.clientStorage.getAsync('scripts').then(function (v) {
+  scriptsOn = v === true;
+  if (figma.command === 'scripts') {
+    scriptsOn = !scriptsOn;
+    figma.notify(scriptsOn
+      ? 'figma-mcp-lite: scripts PERMITIDOS neste computador (o agente pode rodar código no arquivo). Repita o comando pra bloquear.'
+      : 'figma-mcp-lite: scripts bloqueados neste computador.', { timeout: 6000 });
+    return figma.clientStorage.setAsync('scripts', scriptsOn);
+  }
+}).catch(function () { /* sem clientStorage: fica bloqueado */ });
+
 figma.ui.onmessage = async function (msg) {
   if (msg.state) { showState(msg.state); return; }
   const t0 = Date.now();
@@ -77,7 +91,7 @@ const LITE = (function (figma) {
 // setPluginData, loadAllPagesAsync nem fetch; sem crase nem "${" no fonte
 // (a instalação embrulha o código minificado em String.raw).
 
-var V = '0.6.0';
+var V = '0.7.0';
 var NS = 'lite';
 // Sem barra invertida no fonte: a instalação remota é copiada pelo modelo,
 // e barras são o que ele mais erra ao escapar. Daí o NL e nada de regex com \.
@@ -761,6 +775,7 @@ Builder.prototype.node = async function (s, parent) {
   this.count++;
   if (parent) parent.appendChild(n);
   await this.size(n, s, parent, true);
+  if (s.note !== undefined) await setNotes(this, n, s.note, false);
   if (s.anim) await this.anim(n, s.anim);
   if (s.children && 'appendChild' in n) {
     // "def": props padrão pros filhos diretos (o filho sobrescreve).
@@ -840,7 +855,11 @@ async function find(ref, from) {
 async function editNode(b, node, patch) {
   if (patch.d !== undefined) { if (patch.w === undefined) patch.w = patch.d; if (patch.h === undefined) patch.h = patch.d; }
   if (patch.remove) { node.remove(); return; }
+  // Desanexar antes do resto: o nó vira outro (id novo) e o patch segue nele.
+  if (patch.detach) node = detach(b, node, patch.detach === 'all');
   if (patch.n) node.name = patch.n;
+  if (patch.notes !== undefined) await setNotes(b, node, patch.notes, true);
+  if (patch.note !== undefined) await setNotes(b, node, patch.note, false);
   if (node.type === 'TEXT') {
     if (patch.type) await b.typeRole(node, patch);
     if (patch.text !== undefined) {
@@ -872,6 +891,115 @@ async function editNode(b, node, patch) {
   }
   await b.size(node, patch, node.parent);
   if (patch.anim) await b.anim(node, patch.anim);
+  return node;
+}
+
+// ─── desanexar instâncias ───────────────────────────────────────────────────
+// detach:true desanexa a instância; detach:"all" também as instâncias de
+// dentro (o nó pode ser um frame comum com instâncias nos filhos).
+function detach(b, node, deep) {
+  var n = node;
+  var count = 0;
+  if (n.type === 'INSTANCE') { n = n.detachInstance(); count++; }
+  else if (!deep) { b.w('não é instância: ' + n.name + ' (use detach:"all" pra desanexar as de dentro)'); return n; }
+  if (deep && 'findAll' in n) {
+    // Instância dentro de instância muda de id ao desanexar a de fora: busca de novo a cada volta.
+    for (var guard = 0; guard < 2000; guard++) {
+      var left = n.findAll(function (c) { return c.type === 'INSTANCE'; });
+      if (!left.length) break;
+      left[0].detachInstance();
+      count++;
+    }
+  }
+  b.detached = (b.detached || 0) + count;
+  return n;
+}
+
+// ─── anotações (Dev Mode) ───────────────────────────────────────────────────
+// note: "texto" | {text, cat, props:["w","gap","fill"…]} | lista deles — soma
+// às que já existem. notes: o mesmo, mas troca todas. note:false apaga todas.
+var NOTE_COLORS = ['blue', 'green', 'orange', 'violet', 'teal', 'pink', 'yellow', 'red'];
+var NOTE_PROPS = { w: 'width', h: 'height', fill: 'fills', stroke: 'strokes', effect: 'effects', sw: 'strokeWeight', r: 'cornerRadius', gap: 'itemSpacing', pad: 'padding', layout: 'layoutMode', align: 'alignItems', o: 'opacity', font: 'fontFamily', size: 'fontSize', weight: 'fontWeight', lh: 'lineHeight', type: 'textStyleId', comp: 'mainComponent' };
+var NOTE_CATS = null;
+
+async function noteCat(label) {
+  if (!NOTE_CATS) NOTE_CATS = await figma.annotations.getAnnotationCategoriesAsync();
+  var want = String(label).toLowerCase();
+  for (var i = 0; i < NOTE_CATS.length; i++) if (NOTE_CATS[i].label.toLowerCase() === want) return NOTE_CATS[i].id;
+  var c = await figma.annotations.addAnnotationCategoryAsync({ label: String(label), color: NOTE_COLORS[NOTE_CATS.length % NOTE_COLORS.length] });
+  NOTE_CATS.push(c);
+  return c.id;
+}
+
+// Lidas do nó, as anotações trazem label e labelMarkdown juntos; na escrita a
+// Figma aceita só um dos dois.
+function cleanNote(a) {
+  var o = {};
+  if (a.labelMarkdown) o.labelMarkdown = a.labelMarkdown; else if (a.label) o.label = a.label;
+  if (a.properties && a.properties.length) o.properties = a.properties.map(function (p) { return { type: p.type }; });
+  if (a.categoryId) o.categoryId = a.categoryId;
+  return o;
+}
+
+async function setNotes(b, node, note, replace) {
+  if (!('annotations' in node)) { b.w('anotação não vale neste tipo de nó: ' + node.type + ' ' + node.name); return; }
+  if (note === false || note === null) { node.annotations = []; return; }
+  var list = replace ? [] : (node.annotations || []).map(cleanNote);
+  var items = Array.isArray(note) ? note : [note];
+  for (var i = 0; i < items.length; i++) {
+    var it = typeof items[i] === 'string' ? { text: items[i] } : items[i];
+    var a = {};
+    if (it.text) a.labelMarkdown = String(it.text);
+    if (it.props) a.properties = [].concat(it.props).map(function (p) { return { type: NOTE_PROPS[p] || p }; });
+    if (it.cat) {
+      try { a.categoryId = await noteCat(it.cat); } catch (e) { b.w('categoria de anotação: ' + ((e && e.message) || e)); }
+    }
+    if (!a.labelMarkdown && !a.properties) { b.w('anotação vazia ignorada em ' + node.name); continue; }
+    list.push(a);
+  }
+  node.annotations = list;
+}
+
+// ─── páginas na ordem do arquivo ────────────────────────────────────────────
+// o = { frames: true (frames de 1º nível em ordem de leitura), go: id|nome
+// (abre a página), move: { page: id|nome, index } (reordena) }.
+function pageRef(ref) {
+  var pages = figma.root.children;
+  var r = String(ref);
+  for (var i = 0; i < pages.length; i++) if (pages[i].id === r || pages[i].name === r) return pages[i];
+  for (var j = 0; j < pages.length; j++) if (glob(pages[j].name, r)) return pages[j];
+  throw new Error('página não encontrada: ' + r + ' (há: ' + pages.map(function (p) { return p.name; }).join(', ') + ')');
+}
+
+async function pages(o) {
+  o = o || {};
+  if (o.move) {
+    var mv = pageRef(o.move.page || o.move.id);
+    figma.root.insertChild(Math.max(0, Math.min(o.move.index || 0, figma.root.children.length - 1)), mv);
+  }
+  if (o.go) { var dest = pageRef(o.go); if (dest !== figma.currentPage) await figma.setCurrentPageAsync(dest); }
+  var lines = [];
+  var list = figma.root.children;
+  var max = o.max || 40;
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i];
+    var line = (i + 1) + '. ' + p.id + ' "' + p.name + '"' + (p === figma.currentPage ? ' ← atual' : '');
+    if (!o.frames) { lines.push(line); continue; }
+    if (p !== figma.currentPage && p.loadAsync) await p.loadAsync();
+    var tops = p.children.slice();
+    // Ordem de leitura: linhas de cima pra baixo (mesma faixa = topos a menos
+    // de metade da altura do menor), e da esquerda pra direita em cada linha.
+    tops.sort(function (a, c) {
+      var band = Math.min(a.height || 0, c.height || 0) / 2;
+      return Math.abs(a.y - c.y) > band ? a.y - c.y : a.x - c.x;
+    });
+    lines.push(line + ' (' + tops.length + ' no 1º nível)');
+    tops.slice(0, max).forEach(function (n, k) {
+      lines.push('   ' + (k + 1) + ') ' + n.id + ' ' + n.type + ' "' + n.name + '"' + ('width' in n ? ' ' + Math.round(n.width) + 'x' + Math.round(n.height) + ' @' + Math.round(n.x) + ',' + Math.round(n.y) : ''));
+    });
+    if (tops.length > max) lines.push('   … +' + (tops.length - max));
+  }
+  return lines.join(NL);
 }
 
 // edit(ref, patch) ou edit([{id|path, patch}, …]) — em lote numa chamada só.
@@ -889,7 +1017,7 @@ async function edit(ref, patch) {
       Object.keys(it.patch || {}).forEach(function (k) { pt[k] = it.patch[k]; });
       // Cada item isolado: o que falhar vai pros avisos (pra refazer só ele) e
       // o resto do lote segue.
-      try { await editNode(b, nodes[j], pt); done++; last = nodes[j]; }
+      try { last = (await editNode(b, nodes[j], pt)) || nodes[j]; done++; }
       catch (e) { b.w('falhou ' + (it.id || it.path) + ' (' + nodes[j].name + '): ' + ((e && e.message) || e)); }
     }
   }
@@ -897,6 +1025,7 @@ async function edit(ref, patch) {
   if (last && !last.removed && items.length === 1 && done === 1) {
     try { out.id = last.id; out.size = Math.round(last.width) + 'x' + Math.round(last.height); out.x = Math.round(last.x); out.y = Math.round(last.y); } catch (e) { /* removido */ }
   }
+  if (b.detached) out.detached = b.detached;
   if (b.warn.length) out.warn = b.warn;
   return out;
 }
@@ -1034,6 +1163,7 @@ async function inspect(id, depth) {
       var main = await n.getMainComponentAsync();
       if (main) parts.push('inst=' + (main.parent && main.parent.type === 'COMPONENT_SET' ? main.parent.name : main.name));
     }
+    if (n.annotations && n.annotations.length) parts.push('note«' + n.annotations.map(function (a) { return (a.label || a.labelMarkdown || '') + (a.properties && a.properties.length ? ' [' + a.properties.map(function (q) { return q.type; }).join(',') + ']' : ''); }).join(' | ').slice(0, 200) + '»');
     lines.push(parts.join(' '));
     if (d < depth && 'children' in n) for (var i = 0; i < n.children.length; i++) await walk(n.children[i], d + 1);
     else if ('children' in n && n.children.length) lines[lines.length - 1] += ' (+' + n.children.length + ' filhos)';
@@ -1084,7 +1214,7 @@ async function locate(pattern, max) {
   return lines.join(NL) || 'nada casa com ' + pattern;
 }
 
-return { v: V, build: build, edit: edit, variant: variant, link: link, locate: locate, catalog: catalog, reindex: reindex, inspect: inspect, component: component };
+return { v: V, build: build, edit: edit, variant: variant, link: link, locate: locate, catalog: catalog, reindex: reindex, inspect: inspect, component: component, pages: pages };
 
 })(figma);
 
@@ -1093,6 +1223,7 @@ return { v: V, build: build, edit: edit, variant: variant, link: link, locate: l
 const HANDLERS = {};
 
 HANDLERS.status = async function () {
+  await scriptsReady;
   const sel = figma.currentPage.selection;
   return {
     file: figma.root.name,
@@ -1100,6 +1231,7 @@ HANDLERS.status = async function () {
     page: figma.currentPage.name,
     selection: sel.slice(0, 10).map(brief),
     selectionCount: sel.length,
+    scripts: scriptsOn,
   };
 };
 
@@ -1126,12 +1258,37 @@ HANDLERS.tree = async function (a) {
   return lines.join('\n');
 };
 
-// Correção pontual: operações estruturadas da lib (sem executar código recebido).
+// Correção pontual: operações estruturadas da lib.
 HANDLERS.edit = async function (a) { return LITE.edit(a.items || a.id || a.path, a.patch || {}); };
 HANDLERS.variant = async function (a) { return LITE.variant(a.source, a); };
 HANDLERS.link = async function (a) { return LITE.link(a.links || a); };
 HANDLERS.inspect = async function (a) { return LITE.inspect(a.id, a.depth === undefined ? 3 : a.depth); };
 HANDLERS.component = async function (a) { return LITE.component(a); };
+HANDLERS.pages = async function (a) { return LITE.pages(a); };
+
+// ─── scripts (opt-in) ───────────────────────────────────────────────────────
+// Só com a chave ligada pela pessoa no menu do plugin. Recebe o corpo de uma
+// função async (figma, lite) e devolve o retorno em JSON curto; nós viram
+// {id, type, name, x, y}.
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+HANDLERS.run = async function (a) {
+  await scriptsReady;
+  if (!scriptsOn) {
+    throw new Error('scripts bloqueados neste computador. Pra liberar, a pessoa abre o menu Plugins → figma-mcp-lite → "Permitir/bloquear scripts" (vale até ser bloqueado de novo). Sem isso, use figma_edit/figma_build.');
+  }
+  const fn = new AsyncFunction('figma', 'lite', String(a.code || ''));
+  const out = await fn(figma, LITE);
+  if (out === undefined) return 'ok';
+  let s = JSON.stringify(out, function (k, v) {
+    if (v && typeof v === 'object' && typeof v.id === 'string' && typeof v.type === 'string' && 'parent' in v) return brief(v);
+    if (typeof v === 'symbol') return 'mixed';
+    return v;
+  });
+  if (s === undefined) s = String(out);
+  const max = a.max || 4000;
+  if (s.length > max) s = s.slice(0, max) + '… (+' + (s.length - max) + ' chars)';
+  return s;
+};
 
 HANDLERS.shot = async function (a) {
   const n = await nodeOrThrow(a.id);

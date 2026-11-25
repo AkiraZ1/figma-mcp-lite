@@ -13,7 +13,7 @@ const nodes = new Map();
 function node(type, extra = {}) {
   const n = {
     id: `1:${++seq}`, type, name: type === 'RECTANGLE' ? 'Rectangle' : type === 'ELLIPSE' ? 'Ellipse' : type, x: 0, y: 0, width: 100, height: 100,
-    fills: [], strokes: [], opacity: 1, children: [], parent: null, reactions: [], removed: false,
+    fills: [], strokes: [], opacity: 1, annotations: [], children: [], parent: null, reactions: [], removed: false,
     resize(w, h) { this.width = w; this.height = h; },
     appendChild(c) { if (c.parent) c.parent.children.splice(c.parent.children.indexOf(c), 1); c.parent = this; this.children.push(c); },
     insertChild(i, c) { this.appendChild(c); },
@@ -34,10 +34,21 @@ function node(type, extra = {}) {
   return n;
 }
 const page = node('PAGE', { name: 'Page 1' });
+const page2 = node('PAGE', { name: 'Handoff', async loadAsync() {} });
 const store = {};
+const cats = [{ id: 'c1', label: 'Development' }];
 const figma = {
-  root: { getSharedPluginData: (ns, k) => store[k] || '', setSharedPluginData: (ns, k, v) => { store[k] = v; } },
+  root: {
+    children: [page, page2],
+    insertChild(i, p) { this.children.splice(this.children.indexOf(p), 1); this.children.splice(i, 0, p); },
+    getSharedPluginData: (ns, k) => store[k] || '', setSharedPluginData: (ns, k, v) => { store[k] = v; },
+  },
   currentPage: page,
+  async setCurrentPageAsync(p) { this.currentPage = p; },
+  annotations: {
+    getAnnotationCategoriesAsync: async () => cats.slice(),
+    addAnnotationCategoryAsync: async (c) => { const n = { id: 'c' + (cats.length + 1), label: c.label, color: c.color }; cats.push(n); return n; },
+  },
   viewport: { scrollAndZoomIntoView() {} },
   mixed: Symbol('mixed'),
   createFrame: () => { const f = node('FRAME', { layoutMode: 'NONE' }); page.appendChild(f); return f; },
@@ -135,5 +146,48 @@ await check('spec antiga (0.5.x) continua funcionando', async () => {
   assert.ok(byName(nodes.get(r.id), 'Divisor'));
 });
 
-console.log(`\n${ok}/13 ok`);
-process.exit(ok === 13 ? 0 : 1);
+await check('anotações: soma, categoria criada, props e troca', async () => {
+  const sol = byName(tela, 'Sol');
+  sol.annotations = [{ label: 'antiga', labelMarkdown: 'antiga' }];
+  await L.edit('Universo 1/Sol', { note: { text: 'Raio **70**', cat: 'Medidas', props: ['w', 'gap'] } });
+  assert.equal(sol.annotations.length, 2);
+  assert.deepEqual(sol.annotations[0], { labelMarkdown: 'antiga' }, 'label e labelMarkdown não vão juntos');
+  assert.deepEqual(sol.annotations[1].properties, [{ type: 'width' }, { type: 'itemSpacing' }]);
+  assert.equal(sol.annotations[1].categoryId, cats.find((c) => c.label === 'Medidas').id);
+  await L.edit('Universo 1/Sol', { notes: 'só esta' });
+  assert.deepEqual(sol.annotations, [{ labelMarkdown: 'só esta' }]);
+  await L.edit('Universo 1/Sol', { note: false });
+  assert.equal(sol.annotations.length, 0);
+});
+await check('detach desanexa instância (e as de dentro com "all")', async () => {
+  const mk = (name) => node('INSTANCE', { name, detachInstance() { const f = node('FRAME', { name: this.name, layoutMode: 'NONE' }); this.children.slice().forEach((c) => f.appendChild(c)); this.parent.appendChild(f); this.remove(); return f; } });
+  const box = node('FRAME', { name: 'Caixa', layoutMode: 'NONE' }); tela.appendChild(box);
+  const inst = mk('Botão'); box.appendChild(inst); inst.appendChild(mk('Ícone'));
+  const r = await L.edit(inst.id, { detach: 'all', n: 'Botão solto' });
+  assert.equal(r.detached, 2);
+  const solto = nodes.get(r.id);
+  assert.equal(solto.type, 'FRAME'); assert.equal(solto.name, 'Botão solto');
+  assert.equal(box.findAll((n) => n.type === 'INSTANCE').length, 0);
+  const w = await L.edit(box.id, { detach: true });
+  assert.ok(w.warn.some((x) => x.includes('não é instância')));
+});
+await check('páginas: ordem, frames em ordem de leitura, go e move', async () => {
+  const a = node('FRAME', { name: 'B', x: 500, y: 0, height: 100 }); const c = node('FRAME', { name: 'A', x: 0, y: 10, height: 100 }); const d = node('FRAME', { name: 'C', x: 0, y: 400, height: 100 });
+  [a, c, d].forEach((n) => page2.appendChild(n));
+  const out = await L.pages({ frames: true });
+  const lines = out.split('\n');
+  assert.ok(lines[0].startsWith('1. ') && lines[0].includes('← atual'));
+  const h = lines.findIndex((l) => l.includes('"Handoff"'));
+  assert.deepEqual(lines.slice(h + 1, h + 4).map((l) => l.split('"')[1]), ['A', 'B', 'C']);
+  await L.pages({ go: 'Handoff', move: { page: 'Handoff', index: 0 } });
+  assert.equal(figma.root.children[0], page2);
+  assert.equal(figma.currentPage, page2);
+  figma.currentPage = page;
+});
+await check('note na spec do build', async () => {
+  const r = await L.build({ frame: 'Com nota', note: 'Handoff: usar token', children: [] }, null);
+  assert.deepEqual(nodes.get(r.id).annotations, [{ labelMarkdown: 'Handoff: usar token' }]);
+});
+
+console.log(`\n${ok}/17 ok`);
+process.exit(ok === 17 ? 0 : 1);

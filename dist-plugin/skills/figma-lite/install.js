@@ -1,1 +1,1271 @@
-const s=String.raw`var L=function(y){var C="0.6.0",R="lite",O=[10].map(function(e){return String.fromCharCode(e)})[0],P={start:"MIN",center:"CENTER",end:"MAX",between:"SPACE_BETWEEN",baseline:"BASELINE"},V={100:"Thin",200:"Extra Light",300:"Light",400:"Regular",500:"Medium",600:"Semi Bold",700:"Bold",800:"Extra Bold",900:"Black"};function J(e){var t=e.replace("#","");t.length===3&&(t=t.split("").map(function(n){return n+n}).join(""));var a=parseInt(t.slice(0,6),16),r=t.length===8?parseInt(t.slice(6,8),16)/255:1;return{r:(a>>16&255)/255,g:(a>>8&255)/255,b:(a&255)/255,a:r}}var M=null;function Z(){try{return JSON.parse(y.root.getSharedPluginData(R,"idx"))}catch(e){return null}}async function B(){var e={vars:{},text:{},effect:{},comps:{}},t=function(i,f){return!i||/primit/i.test(i.col||"")&&!/primit/i.test(f)},a=await y.variables.getLocalVariableCollectionsAsync(),r={};a.forEach(function(i){r[i.id]=i.name}),(await y.variables.getLocalVariablesAsync()).forEach(function(i){var f=i.name.toLowerCase(),c=r[i.variableCollectionId]||"";t(e.vars[f],c)&&(e.vars[f]={id:i.id,col:c})});try{for(var n=await y.teamLibrary.getAvailableLibraryVariableCollectionsAsync(),l=0;l<n.length;l++){var u=n[l];(await y.teamLibrary.getVariablesInLibraryCollectionAsync(u.key)).forEach(function(i){var f=i.name.toLowerCase();t(e.vars[f],u.name)&&(e.vars[f]={key:i.key,col:u.name})})}}catch(i){}(await y.getLocalTextStylesAsync()).forEach(function(i){e.text[i.name.toLowerCase()]={id:i.id,key:i.key}}),(await y.getLocalEffectStylesAsync()).forEach(function(i){e.effect[i.name.toLowerCase()]={id:i.id,key:i.key}}),y.currentPage.findAllWithCriteria({types:["COMPONENT_SET","COMPONENT"]}).forEach(function(i){i.type==="COMPONENT"&&i.parent&&i.parent.type==="COMPONENT_SET"||(e.comps[i.name.toLowerCase()]={key:i.key,id:i.id,set:i.type==="COMPONENT_SET"})}),M=e;try{y.root.setSharedPluginData(R,"idx",JSON.stringify(e))}catch(i){}return{vars:Object.keys(e.vars).length,text:Object.keys(e.text).length,comps:Object.keys(e.comps).length}}async function H(){return M||(M=Z()),M||await B(),M}function F(e,t){if(!t)return null;var a=String(t);return a.charAt(0)==="$"&&(a=a.slice(1)),e[a.toLowerCase()]||null}var I={},j={};async function z(e){var t=String(e);if(t.charAt(0)==="$"&&(t=t.slice(1)),t.charAt(0)==="#"&&/^[0-9a-f]{20,}$/i.test(t.slice(1)))return t=t.slice(1),I[t]||(I[t]=await y.variables.importVariableByKeyAsync(t)),I[t];var a=F((await H()).vars,e);if(!a)return null;var r=a.id||a.key;return I[r]||(I[r]=a.id?await y.variables.getVariableByIdAsync(a.id):await y.variables.importVariableByKeyAsync(a.key)),I[r]}async function U(e,t){var a=F((await H())[e],t);if(!a)return null;if(a.id){var r=await y.getStyleByIdAsync(a.id);if(r)return r}return a.key?y.importStyleByKeyAsync(a.key):null}function D(e){var t=function(r){return("0"+Math.round(r*255).toString(16)).slice(-2)},a="#"+t(e.r)+t(e.g)+t(e.b);return e.a!==void 0&&e.a<1&&(a+=t(e.a)),a.toUpperCase()}function G(e){return e&&typeof e=="object"&&"r"in e?D(e):String(typeof e=="number"?Math.round(e*100)/100:e)}function W(e){if(!e)return"";e=e.split(O).join(" ").split("  ").join(" ").trim();for(var t=-1,a=15;a<e.length-1;a++){var r=e.charAt(a);if((r==="."||r==="!"||r==="?")&&e.charAt(a+1)===" "){t=a;break}}return t>0&&(e=e.slice(0,t)),e.charAt(e.length-1)==="."&&(e=e.slice(0,-1)),e.length>90?e.slice(0,88)+"…":e}async function Y(){var e={vars:[],styles:[],comps:[],skipped:[]},t=y.createFrame();try{var a=await y.variables.getLocalVariableCollectionsAsync(),r={};a.forEach(function(d){r[d.id]=d.name}),(await y.variables.getLocalVariablesAsync()).forEach(function(d){if(!d.hiddenFromPublishing){var A="?";try{A=G(d.resolveForConsumer(t).value)}catch(S){}e.vars.push(["arquivo: "+(r[d.variableCollectionId]||""),d.name,A,W(d.description)])}});try{for(var n=await y.teamLibrary.getAvailableLibraryVariableCollectionsAsync(),l=0;l<n.length;l++)for(var u=n[l],i=await y.teamLibrary.getVariablesInLibraryCollectionAsync(u.key),f=0;f<i.length;f+=25){var c=await Promise.all(i.slice(f,f+25).map(function(d){return y.variables.importVariableByKeyAsync(d.key).catch(function(){return null})}));c.forEach(function(d,A){var S="?";try{d&&(S=G(d.resolveForConsumer(t).value))}catch(g){}e.vars.push([u.libraryName+": "+u.name,i[f+A].name,S,d?W(d.description):""])})}}catch(d){}}finally{t.remove()}(await y.getLocalTextStylesAsync()).forEach(function(d){e.styles.push("texto "+d.name+" · "+d.fontName.family+" "+d.fontName.style+" "+d.fontSize)}),(await y.getLocalEffectStylesAsync()).forEach(function(d){e.styles.push("efeito "+d.name)});for(var o={},s=function(d,A){var S=d.parent&&d.parent.type==="COMPONENT_SET"?d.parent:null,g=S||d;if(!o[g.key]){o[g.key]=1;var k=[];try{var T=g.componentPropertyDefinitions||{};k=Object.keys(T).map(function(b){var _=T[b];return b.split("#")[0]+(_.type==="VARIANT"?"="+_.variantOptions.join("|"):"("+_.type.toLowerCase()+")")})}catch(b){var N=String(b&&b.message||b);N.indexOf("in ")===0&&N.indexOf(": ")>0&&(N=N.slice(N.indexOf(": ")+2)),e.skipped.push(g.name+" ("+g.id+"): "+N);return}e.comps.push(g.name+(A?" [lib]":"")+" · ref "+g.key+(k.length?" · "+k.join(", "):""))}},h=0;h<y.root.children.length&&e.comps.length<300;h++){var p=y.root.children[h];try{await p.loadAsync()}catch(d){continue}p.findAllWithCriteria({types:["COMPONENT_SET","COMPONENT"]}).forEach(function(d){d.type==="COMPONENT"&&d.parent&&d.parent.type==="COMPONENT_SET"||s(d,!1)});for(var w=p.findAllWithCriteria({types:["INSTANCE"]}).slice(0,1500),v=0;v<w.length;v++){var m=null;try{m=await w[v].getMainComponentAsync()}catch(d){continue}m&&m.remote&&s(m,!0)}}return e}function K(e){if(e.charAt(0)!=="$")return null;var t=e.indexOf(" "),a=e.slice(1,t<0?e.length:t).split("/");return a.length<3?null:{group:a[0]+"/"+a[1],rest:a.slice(2).join("/")}}function q(e,t){var a={};e.forEach(function(u){var i=K(u);i&&(a[i.group]=a[i.group]||[]).push(i.rest)});var r={};Object.keys(a).forEach(function(u){var i=t.some(function(f){return f.indexOf(u.toLowerCase())>=0});a[u].length>6&&!i&&(r[u]=!0)});var n=[],l={};return e.forEach(function(u){var i=K(u);if(!i||!r[i.group]){n.push(u);return}l[i.group]||(l[i.group]=!0,n.push("$"+i.group+"/… ("+a[i.group].length+', valores com filter "'+i.group+'"): '+a[i.group].join(" ")))}),n}var Q=["font-size","line-height","font-weight","font-weight-emphasis","letter-spacing","font-family"];function ee(e,t){var a=(t||"").toLowerCase().split("|").map(function(c){return c.trim()}).filter(Boolean),r=function(c){return!a.length||a.some(function(o){return c.toLowerCase().indexOf(o)>=0})},n=[],l={},u=[];e.vars.forEach(function(c){l[c[0]]||(l[c[0]]=[],u.push(c[0])),l[c[0]].push(c)}),u.forEach(function(c){var o=[],s={},h=[];l[c].forEach(function(p){var w=p[1].lastIndexOf("/"),v=w>0&&Q.indexOf(p[1].slice(w+1))>=0?[null,p[1].slice(0,w),p[1].slice(w+1)]:null;if(v&&v[1].indexOf("/")>=0){s[v[1]]||(s[v[1]]=[],h.push(v[1])),s[v[1]].push(v[2].replace("font-","").replace("letter-spacing","ls%").replace("line-height","lh")+" "+p[2]);return}o.push("$"+p[1]+" "+p[2]+(p[3]?" · "+p[3]:""))}),h.forEach(function(p){o.push("type "+p+": "+s[p].join(", "))}),o=q(o.filter(r),a),o.length&&n.push("## "+c+O+o.join(O))});var i=e.styles.filter(r);i.length&&n.push("## Estilos"+O+i.join(O));var f=e.comps.filter(r);return f.length&&n.push("## Componentes (inst: nome ou ref)"+O+f.join(O)),e.skipped&&e.skipped.length&&n.push("## Componentes pulados (com erro no Figma; corrija e rode refresh)"+O+e.skipped.join(O)),n.join(O)||"nada no catálogo com esse filtro"}async function te(e){e=e||{};var t=null;if(!e.refresh)try{t=JSON.parse(y.root.getSharedPluginData(R,"cat"))}catch(a){t=null}if(!t){t=await Y();try{y.root.setSharedPluginData(R,"cat",JSON.stringify(t))}catch(a){}await B()}return ee(t,e.filter)}function E(){this.warn=[],this.count=0}E.prototype.w=function(e){this.warn.length<15&&this.warn.push(e)},E.prototype.paint=async function(e){if(typeof e!="string")return null;if(e[0]==="$"){var t=await z(e);return t?y.variables.setBoundVariableForPaint({type:"SOLID",color:{r:0,g:0,b:0}},"color",t):(this.w("variável não achada: "+e),null)}var a=J(e);return{type:"SOLID",color:{r:a.r,g:a.g,b:a.b},opacity:a.a}},E.prototype.num=async function(e,t,a){if(a!=null){if(typeof a=="string"&&a[0]==="$"){var r=await z(a);if(!r)return this.w("variável não achada: "+a);e.setBoundVariable(t,r);return}e[t]=a}},E.prototype.common=async function(e,t){if(t.fill!==void 0){var a=await this.paint(t.fill);e.fills=a?[a]:[]}if(t.stroke){var r=await this.paint(t.stroke);r&&(e.strokes=[r],await this.num(e,"strokeWeight",t.sw||1))}if(t.r!==void 0)for(var n=["topLeftRadius","topRightRadius","bottomLeftRadius","bottomRightRadius"],l=0;l<n.length;l++)await this.num(e,n[l],t.r);if(t.o!==void 0&&(e.opacity=t.o),t.effect){var u=await U("effect",t.effect);u?await e.setEffectStyleIdAsync(u.id):this.w("efeito não achado: "+t.effect)}if(t.clip!==void 0&&"clipsContent"in e&&(e.clipsContent=!!t.clip),t.img!==void 0)if(t.img64){var i=y.createImage(y.base64Decode(t.img64)),f=String(t.fit||"fill").toUpperCase();e.fills=[{type:"IMAGE",imageHash:i.hash,scaleMode:f==="FIT"||f==="CROP"||f==="TILE"?f:"FILL"}]}else this.w("imagem não carregada ("+(t.imgErr||"só funciona no modo plugin")+"): "+String(t.img).slice(0,60));if((t.brush||t.dynamic)&&"complexStrokeProperties"in e)try{if(t.dynamic)e.complexStrokeProperties={type:"DYNAMIC",frequency:t.dynamic.frequency||1,wiggle:t.dynamic.wiggle||1,smoothen:t.dynamic.smoothen===void 0?.5:t.dynamic.smoothen};else{var c=String(t.brush.name||t.brush).toUpperCase(),o=["BUBBLEGUM","WITCH_HOUSE","SHOEGAZE","HONKY_TONK","SCREAMO","DRONE","DOO_WOP","SPOKEN_WORD","VAPORWAVE","OI"].indexOf(c)>=0,s=o?"SCATTER":"STRETCH";j[s]||(await y.loadBrushesAsync(s),j[s]=!0),e.complexStrokeProperties=o?{type:"BRUSH",brushType:"SCATTER",brushName:c,gap:t.brush.gap||1,wiggle:t.brush.wiggle||0,sizeJitter:t.brush.sizeJitter||0,angularJitter:t.brush.angularJitter||0,rotation:t.brush.rotation||0}:{type:"BRUSH",brushType:"STRETCH",brushName:c,direction:t.brush.direction||"FORWARD"}}}catch(h){this.w("pincel/traço: "+(h&&h.message||h))}},E.prototype.size=async function(e,t,a,r){var n=this,l=a&&a.layoutMode&&a.layoutMode!=="NONE",u=async function(i,f){var c=f==="w"?"layoutSizingHorizontal":"layoutSizingVertical";if(i==="fill"){l&&(e[c]="FILL");return}if(i==="hug"){(e.type==="TEXT"||e.layoutMode&&e.layoutMode!=="NONE")&&(e[c]="HUG");return}var o=null;if(typeof i=="string"&&i[0]==="$"){if(o=await z(i),!o)return n.w("variável não achada: "+i);i=Number(o.resolveForConsumer(e).value)}typeof i=="number"&&(f==="w"?e.resize(i,e.height):e.resize(e.width,i),(l||e.layoutMode&&e.layoutMode!=="NONE")&&(e[c]="FIXED"),o&&e.setBoundVariable(f==="w"?"width":"height",o))};await u(t.w,"w"),await u(t.h,"h"),r&&e.type==="TEXT"&&t.w===void 0&&!t.abs&&a&&a.layoutMode==="VERTICAL"&&a.layoutSizingHorizontal!=="HUG"&&(e.layoutSizingHorizontal="FILL",e.textAutoResize="HEIGHT"),t.abs&&l&&(e.layoutPositioning="ABSOLUTE"),t.x!==void 0&&(e.x=t.x),t.y!==void 0&&(e.y=t.y)},E.prototype.frame=async function(e){var t=y.createFrame();t.name=e.frame,t.fills=[];var a=e.layout===void 0?"V":e.layout;if(a!=="none"){if(t.layoutMode=a==="H"?"HORIZONTAL":"VERTICAL",t.layoutSizingHorizontal="HUG",t.layoutSizingVertical="HUG",e.wrap&&(t.layoutWrap="WRAP"),await this.num(t,"itemSpacing",e.gap),e.pad!==void 0){var r=Array.isArray(e.pad)?e.pad:[e.pad],n=r[0],l=r.length>1?r[1]:r[0],u=r.length>2?r[2]:r[0],i=r.length>3?r[3]:l;await this.num(t,"paddingTop",n),await this.num(t,"paddingRight",l),await this.num(t,"paddingBottom",u),await this.num(t,"paddingLeft",i)}e.align&&(t.primaryAxisAlignItems=P[e.align]||"MIN"),e.cross&&(t.counterAxisAlignItems=P[e.cross]||"MIN")}return await this.common(t,e),t},E.prototype.typeRole=async function(e,t){var a=async function(d){var A=await z(d);return A?{v:A,val:A.resolveForConsumer(e).value}:null},r=t.type;r.charAt(r.length-1)==="/"&&(r=r.slice(0,-1));var n=r.slice(-7)==="/strong";n&&(r=r.slice(0,-7));for(var l=null,u=null,i=[r+"/","text/"+r+"/","typography/"+r+"/","font/"+r+"/"],f=0;f<i.length&&!u;f++)u=await a(i[f]+"font-size"),u&&(l=i[f]);if(!u)return this.w("papel tipográfico não achado: "+t.type),!1;var c=l.split("/")[0]+"/",o=await a(l+"font-family")||await a(c+"font-family")||await a("typeface/default")||await a("font-family"),s=await a(l+"line-height"),h=n&&await a(l+"font-weight-emphasis")||await a(l+"font-weight"),p=await a(l+"letter-spacing"),w=o?String(o.val):"Inter",v=h?Number(h.val):400,m={family:w,style:V[v]||"Regular"};try{await y.loadFontAsync(m)}catch(d){m={family:w,style:m.style.replace(" ","")};try{await y.loadFontAsync(m)}catch(A){this.w("fonte indisponível "+w+" "+v+", usando Inter"),m={family:"Inter",style:V[v]||"Regular"},await y.loadFontAsync(m)}}e.fontName=m,e.setBoundVariable("fontSize",u.v),s&&e.setBoundVariable("lineHeight",s.v),p&&(e.letterSpacing={value:Number(p.val),unit:"PERCENT"});try{o&&e.setBoundVariable("fontFamily",o.v),h&&e.setBoundVariable("fontWeight",h.v)}catch(d){this.w(t.type+": família/peso ficaram fixos ("+d.message+")")}return!0},E.prototype.text=async function(e){var t=y.createText(),a=e.type&&await this.typeRole(t,e);if(!a){var r={family:e.font||"Inter",style:V[e.weight]||e.weight||"Regular"},n=null;e.style&&(n=await U("text",e.style),n?r=n.fontName:this.w("estilo de texto não achado: "+e.style));try{await y.loadFontAsync(r)}catch(u){this.w("fonte indisponível "+r.family+" "+r.style+", usando Inter"),r={family:"Inter",style:"Regular"},await y.loadFontAsync(r),n=null}n?await t.setTextStyleIdAsync(n.id):t.fontName=r,e.size&&!n&&(t.fontSize=e.size)}if(t.characters=String(e.text),t.name=e.n||String(e.text).slice(0,30),e.color){var l=await this.paint(e.color);l&&(t.fills=[l])}return e.align&&(t.textAlignHorizontal=e.align.toUpperCase()==="START"?"LEFT":e.align.toUpperCase()),t.textAutoResize=e.w!==void 0?"HEIGHT":"WIDTH_AND_HEIGHT",t},E.prototype.inst=async function(e){var t=e.inst,a=this,r=/^[0-9a-f]{40}$/i.test(t)?{key:t,set:null}:F((await H()).comps,t);if(!r)return this.w("componente não achado: "+t),null;var n=r.id?await y.getNodeByIdAsync(r.id):null;if(!n)try{n=r.set===!1?await y.importComponentByKeyAsync(r.key):await y.importComponentSetByKeyAsync(r.key)}catch(h){n=await y.importComponentByKeyAsync(r.key)}var l=n.type==="COMPONENT_SET"?n.defaultVariant||n.children[0]:n,u=l.createInstance();if(e.n&&(u.name=e.n),e.props){var i=u.componentProperties,f={};Object.keys(e.props).forEach(function(h){var p=h.toLowerCase(),w=Object.keys(i).filter(function(v){return v.split("#")[0].toLowerCase()===p})[0];w?f[w]=e.props[h]:a.w(t+": prop não existe: "+h)});var c=Object.keys(f).some(function(h){return i[h].type==="TEXT"});if(c)for(var o=u.findAllWithCriteria({types:["TEXT"]}),s=0;s<o.length;s++)o[s].fontName!==y.mixed&&await y.loadFontAsync(o[s].fontName);try{u.setProperties(f)}catch(h){this.w(t+": "+h.message)}}return await this.common(u,e),u},E.prototype.recolor=async function(e,t){var a=await this.paint(t);if(a){var r=[e].concat("findAll"in e?e.findAll(function(){return!0}):[]);r.forEach(function(n){n.type==="FRAME"||n.type==="GROUP"||(Array.isArray(n.fills)&&n.fills.length&&(n.fills=[a]),Array.isArray(n.strokes)&&n.strokes.length&&(n.strokes=[a]))})}},E.prototype.anim=async function(e,t){if(t)try{var a=t.delay||0;if(t.style){var r=String(t.style).toLowerCase(),n=y.motion.figmaAnimationStyles(),l=n.filter(function(f){return String(f.name).toLowerCase()===r})[0];if(!l)this.w('estilo de animação "'+t.style+'" não existe; disponíveis: '+n.map(function(f){return f.name}).join(", "));else{var u={timelineOffset:a};t.dur!==void 0&&(u.duration=t.dur),t.props&&(u.props=t.props),e.applyAnimationStyle(l.styleId,u)}}t.keys&&Object.keys(t.keys).forEach(function(f){e.applyManualKeyframeTrack({type:"PROPERTY",name:f.toUpperCase()},{keyframes:t.keys[f].map(function(c,o){var s=f.toUpperCase().slice(-3)==="_XY",h=Array.isArray(c[1])?{x:c[1][0],y:c[1][1]}:{x:c[1],y:c[1]},p={timelinePosition:c[0]+a,value:s?{type:"VECTOR",value:h}:{type:"FLOAT",value:c[1]}};return o&&(p.easing={type:String(c[2]||t.ease||"EASE_OUT").toUpperCase()}),p})})}),t.total&&e.timelines&&e.timelines[0]&&e.setTimelineDuration(e.timelines[0].id,t.total)}catch(f){var i=String(f&&f.message||f);this.w(i.indexOf("not a supported API")>=0?"animação: o Motion da Figma não está liberado nesta conta":"animação: "+i)}};function ae(e){var t=e|0;return function(){t=t+1831565813|0;var a=Math.imul(t^t>>>15,1|t);return a=a+Math.imul(a^a>>>7,61|a)^a,((a^a>>>14)>>>0)/4294967296}}E.prototype.scatter=async function(e,t){var a=y.createFrame();a.name=e.n||e.scatter,a.fills=[],a.clipsContent=!1;var r=e.area||[t?t.width:400,t?t.height:400];a.resize(r[0],r[1]);for(var n=ae(e.seed===void 0?1:e.seed),l=function(v,m){return Array.isArray(v)?v[0]+(v[1]-v[0])*m:v},u=await this.paint(e.fill===void 0?"#FFFFFF":e.fill),i=e.item||String(e.scatter).replace(/s$/,""),f=e.shift||0,c=0;c<(e.count||50);c++){var o=n()*r[0],s=n()*r[1],h=l(e.size===void 0?[1,3]:e.size,n()),p=l(e.o===void 0?1:e.o,n()),w=y.createEllipse();w.name=i+" "+(c+1),w.resize(h,h),w.x=((o+f)%r[0]+r[0])%r[0],w.y=s,w.opacity=p,w.fills=u?[u]:[],a.appendChild(w),this.count++}return a},E.prototype.node=async function(e,t){var a=null;if(e.d!==void 0){var r={};Object.keys(e).forEach(function(s){r[s]=e[s]}),r.w===void 0&&(r.w=e.d),r.h===void 0&&(r.h=e.d),e=r}if(e.scatter!==void 0)return a=await this.scatter(e,t),this.count++,t&&t.appendChild(a),t&&t.layoutMode&&t.layoutMode!=="NONE"&&(a.layoutPositioning="ABSOLUTE"),a.x=e.x||0,a.y=e.y||0,a;if(e.frame!==void 0)a=await this.frame(e);else if(e.text!==void 0)a=await this.text(e);else if(e.inst!==void 0)a=await this.inst(e);else if(e.rect!==void 0)a=y.createRectangle(),a.name=e.n||e.rect||"Retângulo",a.fills=[],await this.common(a,e);else if(e.ellipse!==void 0)a=y.createEllipse(),a.name=e.n||e.ellipse||"Elipse",a.fills=[],await this.common(a,e);else if(e.svg!==void 0){a=y.createNodeFromSvg(String(e.svg)),a.name=e.n||"Ícone",e.color&&await this.recolor(a,e.color);var n={};Object.keys(e).forEach(function(s){s!=="fill"&&(n[s]=e[s])}),await this.common(a,n)}else if(e.path!==void 0){if(a=y.createVector(),a.vectorPaths=[{windingRule:"NONZERO",data:String(e.path)}],a.name=e.n||"Desenho",a.fills=[],await this.common(a,e),e.onPath!==void 0){var l={family:e.font||"Inter",style:V[e.weight]||"Regular"};if(await y.loadFontAsync(l),a=y.createTextPath(a,0,0),a.fontName=l,e.size&&(a.fontSize=e.size),a.characters=String(e.onPath),e.color){var u=await this.paint(e.color);u&&(a.fills=[u])}}}else if(e.clone!==void 0){var i=await y.getNodeByIdAsync(e.clone);i?a=i.clone():this.w("clone: nó não achado "+e.clone)}else return this.w("nó sem tipo: "+JSON.stringify(e).slice(0,60)),null;if(!a)return null;if(e.n&&(a.name=e.n),this.count++,t&&t.appendChild(a),await this.size(a,e,t,!0),e.anim&&await this.anim(a,e.anim),e.children&&"appendChild"in a)for(var f=0;f<e.children.length;f++){var c=e.children[f];if(e.def){var o={};Object.keys(e.def).forEach(function(s){o[s]=e.def[s]}),Object.keys(c).forEach(function(s){o[s]=c[s]}),c=o}await this.node(c,a)}return a};async function re(e,t){var a=new E,r=t&&(await x(t))[0]||null;if(t&&!r)throw new Error("nó pai não encontrado: "+t);var n=null;r&&r.type==="PAGE"&&(n=r.name,r!==y.currentPage&&await y.setCurrentPageAsync(r),r=null);var l=await a.node(e,r);if(!l)throw new Error("nada criado: "+a.warn.join("; "));if(!r&&e.x===void 0){var u=0;y.currentPage.children.forEach(function(f){f!==l&&(u=Math.max(u,f.x+f.width))}),l.x=u?u+120:0,l.y=0}try{y.currentPage.selection=[l],y.viewport.scrollAndZoomIntoView([l])}catch(f){}var i={v:C,id:l.id,nodes:a.count,size:Math.round(l.width)+"x"+Math.round(l.height),x:Math.round(l.x),y:Math.round(l.y)};return n&&(i.page=n+" (o id informado era a página: criado na raiz dela)"),a.warn.length&&(i.warn=a.warn),i}function ie(e,t){if(t.indexOf("*")<0)return e===t;var a=t.split("*");if(e.indexOf(a[0])!==0)return!1;for(var r=a[0].length,n=1;n<a.length;n++){if(n===a.length-1)return e.length-a[n].length>=r&&e.slice(e.length-a[n].length)===a[n];var l=e.indexOf(a[n],r);if(l<0)return!1;r=l+a[n].length}return!0}async function x(e,t){if(e=String(e),/^[0-9]+:[0-9]+$/.test(e)){var a=await y.getNodeByIdAsync(e);return a?[a]:[]}for(var r=t?[t]:null,n=e.split("/"),l=0;l<n.length;l++){var u=[],i=r?[]:y.currentPage.children.slice();r&&r.forEach(function(f){"children"in f&&(i=i.concat(f.children))}),i.forEach(function(f){ie(f.name,n[l])&&u.push(f)}),r=u}return r||[]}async function X(e,t,a){if(a.d!==void 0&&(a.w===void 0&&(a.w=a.d),a.h===void 0&&(a.h=a.d)),a.remove){t.remove();return}if(a.n&&(t.name=a.n),t.type==="TEXT"&&(a.type&&await e.typeRole(t,a),a.text!==void 0&&(t.fontName!==y.mixed&&await y.loadFontAsync(t.fontName),t.characters=String(a.text)),a.color)){var r=await e.paint(a.color);r&&(t.fills=[r])}if(t.layoutMode!==void 0&&t.layoutMode!=="NONE"){if(a.layout&&(t.layoutMode=a.layout==="H"?"HORIZONTAL":"VERTICAL"),await e.num(t,"itemSpacing",a.gap),a.pad!==void 0){var n=Array.isArray(a.pad)?a.pad:[a.pad],l=n[0],u=n.length>1?n[1]:n[0],i=n.length>2?n[2]:n[0],f=n.length>3?n[3]:u;await e.num(t,"paddingTop",l),await e.num(t,"paddingRight",u),await e.num(t,"paddingBottom",i),await e.num(t,"paddingLeft",f)}a.align&&(t.primaryAxisAlignItems=P[a.align]||"MIN"),a.cross&&(t.counterAxisAlignItems=P[a.cross]||"MIN")}var c={};if(["fill","stroke","sw","r","o","effect","clip","img","img64","imgErr","fit","brush","dynamic"].forEach(function(s){a[s]!==void 0&&(c[s]=a[s])}),c.sw!==void 0&&c.stroke===void 0&&await e.num(t,"strokeWeight",c.sw),await e.common(t,c),a.parent){var o=await y.getNodeByIdAsync(a.parent);if(!o)throw new Error("nó pai não encontrado: "+a.parent);a.index!==void 0?o.insertChild(a.index,t):o.appendChild(t)}await e.size(t,a,t.parent),a.anim&&await e.anim(t,a.anim)}async function ne(e,t){for(var a=new E,r=Array.isArray(e)?e:[{id:e,patch:t}],n=0,l=null,u=0;u<r.length;u++){var i=r[u],f=await x(i.id||i.path);if(!f.length){a.w("não achado: "+(i.id||i.path));continue}for(var c=0;c<f.length;c++){var o={};Object.keys(i.patch||{}).forEach(function(h){o[h]=i.patch[h]});try{await X(a,f[c],o),n++,l=f[c]}catch(h){a.w("falhou "+(i.id||i.path)+" ("+f[c].name+"): "+(h&&h.message||h))}}}var s={v:C,edited:n};if(l&&!l.removed&&r.length===1&&n===1)try{s.id=l.id,s.size=Math.round(l.width)+"x"+Math.round(l.height),s.x=Math.round(l.x),s.y=Math.round(l.y)}catch(h){}return a.warn.length&&(s.warn=a.warn),s}async function $(e,t){if(t=t||{},Array.isArray(t.variants)){for(var a=[],r=[],n=0;n<t.variants.length;n++){var l=await $(e,t.variants[n]);a.push({id:l.id,name:l.name,patched:l.patched}),l.warn&&(r=r.concat(l.warn))}var u={v:C,created:a};return r.length&&(u.warn=r.slice(0,15)),u}var i=new E,f=(await x(e))[0];if(!f)throw new Error("tela de origem não achada: "+e);var c=f.clone();if(t.name&&(c.name=t.name),t.x===void 0&&c.parent&&c.parent.type==="PAGE"){var o=0;c.parent.children.forEach(function(g){g!==c&&(o=Math.max(o,g.x+g.width))}),c.x=o+120,c.y=f.y}else t.x!==void 0&&(c.x=t.x,c.y=t.y===void 0?f.y:t.y);for(var s=t.patches||{},h=0,p=Object.keys(s),w=0;w<p.length;w++){var v=p[w],m=v.indexOf("/")>=0?await x(v,c):c.findAll(function(g){return g.name===v});if(!m.length){i.w("camada não achada: "+v);continue}for(var d=0;d<m.length;d++){var A={};Object.keys(s[v]).forEach(function(g){A[g]=s[v][g]});try{await X(i,m[d],A),h++}catch(g){i.w("falhou "+v+": "+(g&&g.message||g))}}}var S={v:C,id:c.id,name:c.name,patched:h,x:Math.round(c.x),y:Math.round(c.y)};return i.warn.length&&(S.warn=i.warn),S}var oe={click:"ON_CLICK",hover:"ON_HOVER",press:"ON_PRESS",drag:"ON_DRAG"},le={smart:"SMART_ANIMATE",dissolve:"DISSOLVE",move:"MOVE_IN",push:"PUSH",slide:"SLIDE_IN"};async function ue(e){e=Array.isArray(e)?e:[e];for(var t=new E,a=0,r=0;r<e.length;r++){var n=e[r],l=(await x(n.from))[0],u=(await x(n.to))[0];if(!l||!u){t.w("link: não achado "+(l?n.to:n.from));continue}var i=String(n.trigger||"click").toLowerCase(),f=i==="delay"?{type:"AFTER_TIMEOUT",timeout:n.ms===void 0?800:n.ms}:{type:oe[i]||"ON_CLICK"},c=String(n.animation||"smart").toLowerCase(),o=c==="instant"?null:{type:le[c]||"SMART_ANIMATE",easing:{type:String(n.easing||"EASE_OUT").toUpperCase()},duration:n.duration===void 0?.4:n.duration};o&&o.type!=="SMART_ANIMATE"&&o.type!=="DISSOLVE"&&(o.direction=String(n.direction||"LEFT").toUpperCase(),o.matchLayers=!1);var s=(l.reactions||[]).filter(function(p){return!p.trigger||p.trigger.type!==f.type});try{await l.setReactionsAsync(s.concat([{trigger:f,actions:[{type:"NODE",destinationId:u.id,navigation:"NAVIGATE",transition:o,resetScrollPosition:!0}]}])),a++}catch(p){t.w("falhou link "+n.from+" → "+n.to+": "+(p&&p.message||p))}}var h={v:C,linked:a};return t.warn.length&&(h.warn=t.warn),h}async function fe(e,t){var a=await y.getNodeByIdAsync(e);if(!a)throw new Error("nó não encontrado: "+e);var r={},n=async function(o){if(!o||!o.id)return null;if(!r[o.id]){var s=await y.variables.getVariableByIdAsync(o.id);r[o.id]=s?"$"+s.name:"?"}return r[o.id]},l=async function(o){if(!Array.isArray(o)||!o.length)return null;var s=o[0];return s.boundVariables&&s.boundVariables.color?await n(s.boundVariables.color):s.type==="SOLID"?D({r:s.color.r,g:s.color.g,b:s.color.b,a:s.opacity===void 0?1:s.opacity}):s.type.toLowerCase()},u=async function(o,s,h){var p=o.boundVariables&&o.boundVariables[h||s],w=p?await n(Array.isArray(p)?p[0]:p):null,v=o[s];return v===void 0||v===y.mixed?null:w?w+"("+Math.round(v*100)/100+")":String(Math.round(v*100)/100)},i=[],f=150,c=async function(o,s){if(!(i.length>=f)){var h=["  ".repeat(s)+o.type+' "'+o.name+'"'];if("width"in o&&h.push(Math.round(o.width)+"x"+Math.round(o.height)+" @"+Math.round(o.x)+","+Math.round(o.y)),o.layoutMode&&o.layoutMode!=="NONE"){h.push(o.layoutMode==="HORIZONTAL"?"row":"col");var p=await u(o,"itemSpacing");p&&p!=="0"&&h.push("gap="+p);var w=[await u(o,"paddingTop"),await u(o,"paddingRight"),await u(o,"paddingBottom"),await u(o,"paddingLeft")];w.some(function(b){return b&&b!=="0"})&&h.push("pad="+w.join(" ")),h.push("align="+o.primaryAxisAlignItems.toLowerCase()+"/"+o.counterAxisAlignItems.toLowerCase())}"layoutSizingHorizontal"in o&&h.push("sizing="+o.layoutSizingHorizontal.toLowerCase()+"/"+o.layoutSizingVertical.toLowerCase());var v=await l(o.fills);v&&o.type!=="TEXT"&&h.push("fill="+v);var m=await l(o.strokes);m&&h.push("stroke="+m+" "+await u(o,"strokeWeight"));var d=await u(o,"topLeftRadius");if(d&&d!=="0"&&h.push("r="+d),o.opacity!==void 0&&o.opacity<1&&h.push("o="+Math.round(o.opacity*100)/100),o.type==="TEXT"){h.push("«"+o.characters.slice(0,80)+"»"),h.push("color="+await l(o.fills));var A=await u(o,"fontSize"),S=o.lineHeight&&o.lineHeight.unit==="PIXELS"?Math.round(o.lineHeight.value):"auto",g=o.boundVariables&&o.boundVariables.lineHeight?await n(o.boundVariables.lineHeight)+"("+S+")":S,k=o.fontName!==y.mixed?o.fontName.family+" "+o.fontName.style:"misto";h.push("font="+k+" size="+A+" lh="+g)}if(o.type==="INSTANCE"){var T=await o.getMainComponentAsync();T&&h.push("inst="+(T.parent&&T.parent.type==="COMPONENT_SET"?T.parent.name:T.name))}if(i.push(h.join(" ")),s<t&&"children"in o)for(var N=0;N<o.children.length;N++)await c(o.children[N],s+1);else"children"in o&&o.children.length&&(i[i.length-1]+=" (+"+o.children.length+" filhos)")}};return await c(a,0),i.length>=f&&i.push("… cortado em "+f+" linhas"),i.join(O)}async function ce(e){var t=async function(u){var i=await y.getNodeByIdAsync(u);if(!i)throw new Error("nó não encontrado: "+u);return i.type==="COMPONENT"||i.type==="COMPONENT_SET"?i:y.createComponentFromNode(i)},a;if(e.ids&&e.ids.length){for(var r=[],n=0;n<e.ids.length;n++)r.push(await t(e.ids[n]));a=y.combineAsVariants(r,r[0].parent||y.currentPage)}else a=await t(e.id);e.n&&(a.name=e.n);var l=[];return e.props&&Object.keys(e.props).forEach(function(u){var i=String(e.props[u]),f=i.indexOf(":"),c=(f>0?i.slice(0,f):"TEXT").toUpperCase(),o=f>0?i.slice(f+1):i;l.push(a.addComponentProperty(u,c,c==="BOOLEAN"?o==="true":o))}),{v:C,id:a.id,type:a.type,ref:a.key,props:l}}async function se(e,t){var a=await x(e),r=a.slice(0,t||60).map(function(n){for(var l=[],u=n;u&&u.type!=="PAGE";u=u.parent)l.unshift(u.name);return l.join("/")+" "+n.id+" "+n.type+("width"in n?" "+Math.round(n.width)+"x"+Math.round(n.height):"")});return a.length>r.length&&r.push("… +"+(a.length-r.length)+" nós"),r.join(O)||"nada casa com "+e}return{v:C,build:re,edit:ne,variant:$,link:ue,locate:se,catalog:te,reindex:B,inspect:fe,component:ce}};`;let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;if(h!==-747551063)return{erro:'cópia corrompida (' + s.length + ' de 28462 caracteres): chame a instalação de novo e cole o código sem alterar nada'};figma.root.setSharedPluginData('lite','lib',s);return{v:new Function(s+';return L')()(figma).v,len:s.length}
+// figma-mcp-lite 0.7.0: instala o builder (lib/builder.js) no arquivo aberto.
+// O texto abaixo fica guardado no arquivo (sharedPluginData "lite"/"lib") e é conferido por hash.
+const s = String.raw`var L = function(figma) {
+  var V = "0.7.0";
+  var NS = "lite";
+  var NL = [10].map(function(c) {
+    return String.fromCharCode(c);
+  })[0];
+  var ALIGN = { start: "MIN", center: "CENTER", end: "MAX", between: "SPACE_BETWEEN", baseline: "BASELINE" };
+  var WEIGHT = { 100: "Thin", 200: "Extra Light", 300: "Light", 400: "Regular", 500: "Medium", 600: "Semi Bold", 700: "Bold", 800: "Extra Bold", 900: "Black" };
+  function hexToRgb(hex) {
+    var h = hex.replace("#", "");
+    if (h.length === 3) h = h.split("").map(function(c) {
+      return c + c;
+    }).join("");
+    var n = parseInt(h.slice(0, 6), 16);
+    var a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+    return { r: (n >> 16 & 255) / 255, g: (n >> 8 & 255) / 255, b: (n & 255) / 255, a };
+  }
+  var IDX = null;
+  function readIdx() {
+    try {
+      return JSON.parse(figma.root.getSharedPluginData(NS, "idx"));
+    } catch (e) {
+      return null;
+    }
+  }
+  async function reindex() {
+    var idx = { vars: {}, text: {}, effect: {}, comps: {} };
+    var prefer = function(cur, col) {
+      return !cur || /primit/i.test(cur.col || "") && !/primit/i.test(col);
+    };
+    var cols = await figma.variables.getLocalVariableCollectionsAsync();
+    var colName = {};
+    cols.forEach(function(c) {
+      colName[c.id] = c.name;
+    });
+    (await figma.variables.getLocalVariablesAsync()).forEach(function(v) {
+      var k = v.name.toLowerCase();
+      var col = colName[v.variableCollectionId] || "";
+      if (prefer(idx.vars[k], col)) idx.vars[k] = { id: v.id, col };
+    });
+    try {
+      var libCols = await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
+      for (var i = 0; i < libCols.length; i++) {
+        var lc = libCols[i];
+        (await figma.teamLibrary.getVariablesInLibraryCollectionAsync(lc.key)).forEach(function(v) {
+          var k = v.name.toLowerCase();
+          if (prefer(idx.vars[k], lc.name)) idx.vars[k] = { key: v.key, col: lc.name };
+        });
+      }
+    } catch (e) {
+    }
+    (await figma.getLocalTextStylesAsync()).forEach(function(s) {
+      idx.text[s.name.toLowerCase()] = { id: s.id, key: s.key };
+    });
+    (await figma.getLocalEffectStylesAsync()).forEach(function(s) {
+      idx.effect[s.name.toLowerCase()] = { id: s.id, key: s.key };
+    });
+    figma.currentPage.findAllWithCriteria({ types: ["COMPONENT_SET", "COMPONENT"] }).forEach(function(n) {
+      if (n.type === "COMPONENT" && n.parent && n.parent.type === "COMPONENT_SET") return;
+      idx.comps[n.name.toLowerCase()] = { key: n.key, id: n.id, set: n.type === "COMPONENT_SET" };
+    });
+    IDX = idx;
+    try {
+      figma.root.setSharedPluginData(NS, "idx", JSON.stringify(idx));
+    } catch (e) {
+    }
+    return { vars: Object.keys(idx.vars).length, text: Object.keys(idx.text).length, comps: Object.keys(idx.comps).length };
+  }
+  async function index() {
+    if (!IDX) IDX = readIdx();
+    if (!IDX) await reindex();
+    return IDX;
+  }
+  function lookup(map, name) {
+    if (!name) return null;
+    var n = String(name);
+    if (n.charAt(0) === "$") n = n.slice(1);
+    return map[n.toLowerCase()] || null;
+  }
+  var varCache = {};
+  var BRUSHES = {};
+  async function getVar(name) {
+    var ref = String(name);
+    if (ref.charAt(0) === "$") ref = ref.slice(1);
+    if (ref.charAt(0) === "#" && /^[0-9a-f]{20,}$/i.test(ref.slice(1))) {
+      ref = ref.slice(1);
+      if (!varCache[ref]) varCache[ref] = await figma.variables.importVariableByKeyAsync(ref);
+      return varCache[ref];
+    }
+    var e = lookup((await index()).vars, name);
+    if (!e) return null;
+    var k = e.id || e.key;
+    if (!varCache[k]) varCache[k] = e.id ? await figma.variables.getVariableByIdAsync(e.id) : await figma.variables.importVariableByKeyAsync(e.key);
+    return varCache[k];
+  }
+  async function getStyle(map, name) {
+    var e = lookup((await index())[map], name);
+    if (!e) return null;
+    if (e.id) {
+      var s = await figma.getStyleByIdAsync(e.id);
+      if (s) return s;
+    }
+    return e.key ? figma.importStyleByKeyAsync(e.key) : null;
+  }
+  function rgbToHex(c) {
+    var to = function(v) {
+      return ("0" + Math.round(v * 255).toString(16)).slice(-2);
+    };
+    var s = "#" + to(c.r) + to(c.g) + to(c.b);
+    if (c.a !== void 0 && c.a < 1) s += to(c.a);
+    return s.toUpperCase();
+  }
+  function fmtVal(v) {
+    if (v && typeof v === "object" && "r" in v) return rgbToHex(v);
+    if (typeof v === "number") return String(Math.round(v * 100) / 100);
+    return String(v);
+  }
+  function firstSentence(d) {
+    if (!d) return "";
+    d = d.split(NL).join(" ").split("  ").join(" ").trim();
+    var end = -1;
+    for (var i = 15; i < d.length - 1; i++) {
+      var c = d.charAt(i);
+      if ((c === "." || c === "!" || c === "?") && d.charAt(i + 1) === " ") {
+        end = i;
+        break;
+      }
+    }
+    if (end > 0) d = d.slice(0, end);
+    if (d.charAt(d.length - 1) === ".") d = d.slice(0, -1);
+    return d.length > 90 ? d.slice(0, 88) + "…" : d;
+  }
+  async function scan() {
+    var cat = { vars: [], styles: [], comps: [], skipped: [] };
+    var probe = figma.createFrame();
+    try {
+      var cols = await figma.variables.getLocalVariableCollectionsAsync();
+      var colName = {};
+      cols.forEach(function(c) {
+        colName[c.id] = c.name;
+      });
+      (await figma.variables.getLocalVariablesAsync()).forEach(function(v) {
+        if (v.hiddenFromPublishing) return;
+        var val = "?";
+        try {
+          val = fmtVal(v.resolveForConsumer(probe).value);
+        } catch (e) {
+        }
+        cat.vars.push(["arquivo: " + (colName[v.variableCollectionId] || ""), v.name, val, firstSentence(v.description)]);
+      });
+      try {
+        var libCols = await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
+        for (var i = 0; i < libCols.length; i++) {
+          var lc = libCols[i];
+          var lvs = await figma.teamLibrary.getVariablesInLibraryCollectionAsync(lc.key);
+          for (var j = 0; j < lvs.length; j += 25) {
+            var chunk = await Promise.all(lvs.slice(j, j + 25).map(function(lv) {
+              return figma.variables.importVariableByKeyAsync(lv.key).catch(function() {
+                return null;
+              });
+            }));
+            chunk.forEach(function(v, k) {
+              var val = "?";
+              try {
+                if (v) val = fmtVal(v.resolveForConsumer(probe).value);
+              } catch (e) {
+              }
+              cat.vars.push([lc.libraryName + ": " + lc.name, lvs[j + k].name, val, v ? firstSentence(v.description) : ""]);
+            });
+          }
+        }
+      } catch (e) {
+      }
+    } finally {
+      probe.remove();
+    }
+    (await figma.getLocalTextStylesAsync()).forEach(function(s) {
+      cat.styles.push("texto " + s.name + " · " + s.fontName.family + " " + s.fontName.style + " " + s.fontSize);
+    });
+    (await figma.getLocalEffectStylesAsync()).forEach(function(s) {
+      cat.styles.push("efeito " + s.name);
+    });
+    var seen = {};
+    var describe = function(node, lib) {
+      var set = node.parent && node.parent.type === "COMPONENT_SET" ? node.parent : null;
+      var owner = set || node;
+      if (seen[owner.key]) return;
+      seen[owner.key] = 1;
+      var props = [];
+      try {
+        var defs = owner.componentPropertyDefinitions || {};
+        props = Object.keys(defs).map(function(k) {
+          var d = defs[k];
+          return k.split("#")[0] + (d.type === "VARIANT" ? "=" + d.variantOptions.join("|") : "(" + d.type.toLowerCase() + ")");
+        });
+      } catch (e) {
+        var msg = String(e && e.message || e);
+        if (msg.indexOf("in ") === 0 && msg.indexOf(": ") > 0) msg = msg.slice(msg.indexOf(": ") + 2);
+        cat.skipped.push(owner.name + " (" + owner.id + "): " + msg);
+        return;
+      }
+      cat.comps.push(owner.name + (lib ? " [lib]" : "") + " · ref " + owner.key + (props.length ? " · " + props.join(", ") : ""));
+    };
+    for (var p = 0; p < figma.root.children.length && cat.comps.length < 300; p++) {
+      var page = figma.root.children[p];
+      try {
+        await page.loadAsync();
+      } catch (e) {
+        continue;
+      }
+      page.findAllWithCriteria({ types: ["COMPONENT_SET", "COMPONENT"] }).forEach(function(n) {
+        if (n.type === "COMPONENT" && n.parent && n.parent.type === "COMPONENT_SET") return;
+        describe(n, false);
+      });
+      var insts = page.findAllWithCriteria({ types: ["INSTANCE"] }).slice(0, 1500);
+      for (var q = 0; q < insts.length; q++) {
+        var main = null;
+        try {
+          main = await insts[q].getMainComponentAsync();
+        } catch (e) {
+          continue;
+        }
+        if (main && main.remote) describe(main, true);
+      }
+    }
+    return cat;
+  }
+  function splitVar(l) {
+    if (l.charAt(0) !== "$") return null;
+    var sp = l.indexOf(" ");
+    var parts = l.slice(1, sp < 0 ? l.length : sp).split("/");
+    if (parts.length < 3) return null;
+    return { group: parts[0] + "/" + parts[1], rest: parts.slice(2).join("/") };
+  }
+  function collapse(lines, fs) {
+    var groups = {};
+    lines.forEach(function(l) {
+      var v = splitVar(l);
+      if (v) (groups[v.group] = groups[v.group] || []).push(v.rest);
+    });
+    var big = {};
+    Object.keys(groups).forEach(function(g) {
+      var asked = fs.some(function(f) {
+        return f.indexOf(g.toLowerCase()) >= 0;
+      });
+      if (groups[g].length > 6 && !asked) big[g] = true;
+    });
+    var out = [];
+    var done = {};
+    lines.forEach(function(l) {
+      var v = splitVar(l);
+      if (!v || !big[v.group]) {
+        out.push(l);
+        return;
+      }
+      if (done[v.group]) return;
+      done[v.group] = true;
+      out.push("$" + v.group + "/… (" + groups[v.group].length + ', valores com filter "' + v.group + '"): ' + groups[v.group].join(" "));
+    });
+    return out;
+  }
+  var TYPE_PROPS = ["font-size", "line-height", "font-weight", "font-weight-emphasis", "letter-spacing", "font-family"];
+  function fmtCatalog(cat, filter) {
+    var fs = (filter || "").toLowerCase().split("|").map(function(x) {
+      return x.trim();
+    }).filter(Boolean);
+    var keep = function(l) {
+      return !fs.length || fs.some(function(f) {
+        return l.toLowerCase().indexOf(f) >= 0;
+      });
+    };
+    var out = [];
+    var groups = {};
+    var order = [];
+    cat.vars.forEach(function(r) {
+      if (!groups[r[0]]) {
+        groups[r[0]] = [];
+        order.push(r[0]);
+      }
+      groups[r[0]].push(r);
+    });
+    order.forEach(function(g) {
+      var lines = [];
+      var types = {};
+      var typeOrder = [];
+      groups[g].forEach(function(r) {
+        var cut = r[1].lastIndexOf("/");
+        var m = cut > 0 && TYPE_PROPS.indexOf(r[1].slice(cut + 1)) >= 0 ? [null, r[1].slice(0, cut), r[1].slice(cut + 1)] : null;
+        if (m && m[1].indexOf("/") >= 0) {
+          if (!types[m[1]]) {
+            types[m[1]] = [];
+            typeOrder.push(m[1]);
+          }
+          types[m[1]].push(m[2].replace("font-", "").replace("letter-spacing", "ls%").replace("line-height", "lh") + " " + r[2]);
+          return;
+        }
+        lines.push("$" + r[1] + " " + r[2] + (r[3] ? " · " + r[3] : ""));
+      });
+      typeOrder.forEach(function(t) {
+        lines.push("type " + t + ": " + types[t].join(", "));
+      });
+      lines = collapse(lines.filter(keep), fs);
+      if (lines.length) out.push("## " + g + NL + lines.join(NL));
+    });
+    var st = cat.styles.filter(keep);
+    if (st.length) out.push("## Estilos" + NL + st.join(NL));
+    var cp = cat.comps.filter(keep);
+    if (cp.length) out.push("## Componentes (inst: nome ou ref)" + NL + cp.join(NL));
+    if (cat.skipped && cat.skipped.length) out.push("## Componentes pulados (com erro no Figma; corrija e rode refresh)" + NL + cat.skipped.join(NL));
+    return out.join(NL) || "nada no catálogo com esse filtro";
+  }
+  async function catalog(o) {
+    o = o || {};
+    var cat = null;
+    if (!o.refresh) {
+      try {
+        cat = JSON.parse(figma.root.getSharedPluginData(NS, "cat"));
+      } catch (e) {
+        cat = null;
+      }
+    }
+    if (!cat) {
+      cat = await scan();
+      try {
+        figma.root.setSharedPluginData(NS, "cat", JSON.stringify(cat));
+      } catch (e) {
+      }
+      await reindex();
+    }
+    return fmtCatalog(cat, o.filter);
+  }
+  function Builder() {
+    this.warn = [];
+    this.count = 0;
+  }
+  Builder.prototype.w = function(m) {
+    if (this.warn.length < 15) this.warn.push(m);
+  };
+  Builder.prototype.paint = async function(color) {
+    if (typeof color !== "string") return null;
+    if (color[0] === "$") {
+      var v = await getVar(color);
+      if (!v) {
+        this.w("variável não achada: " + color);
+        return null;
+      }
+      return figma.variables.setBoundVariableForPaint({ type: "SOLID", color: { r: 0, g: 0, b: 0 } }, "color", v);
+    }
+    var c = hexToRgb(color);
+    return { type: "SOLID", color: { r: c.r, g: c.g, b: c.b }, opacity: c.a };
+  };
+  Builder.prototype.num = async function(node, field, val) {
+    if (val === void 0 || val === null) return;
+    if (typeof val === "string" && val[0] === "$") {
+      var v = await getVar(val);
+      if (!v) return this.w("variável não achada: " + val);
+      node.setBoundVariable(field, v);
+      return;
+    }
+    node[field] = val;
+  };
+  Builder.prototype.common = async function(node, s) {
+    if (s.fill !== void 0) {
+      var p = await this.paint(s.fill);
+      node.fills = p ? [p] : [];
+    }
+    if (s.stroke) {
+      var ps = await this.paint(s.stroke);
+      if (ps) {
+        node.strokes = [ps];
+        await this.num(node, "strokeWeight", s.sw || 1);
+      }
+    }
+    if (s.r !== void 0) {
+      var fields = ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"];
+      for (var i = 0; i < fields.length; i++) await this.num(node, fields[i], s.r);
+    }
+    if (s.o !== void 0) node.opacity = s.o;
+    if (s.effect) {
+      var st = await getStyle("effect", s.effect);
+      if (st) await node.setEffectStyleIdAsync(st.id);
+      else this.w("efeito não achado: " + s.effect);
+    }
+    if (s.clip !== void 0 && "clipsContent" in node) node.clipsContent = !!s.clip;
+    if (s.img !== void 0) {
+      if (s.img64) {
+        var image = figma.createImage(figma.base64Decode(s.img64));
+        var fit = String(s.fit || "fill").toUpperCase();
+        node.fills = [{ type: "IMAGE", imageHash: image.hash, scaleMode: fit === "FIT" || fit === "CROP" || fit === "TILE" ? fit : "FILL" }];
+      } else this.w("imagem não carregada (" + (s.imgErr || "só funciona no modo plugin") + "): " + String(s.img).slice(0, 60));
+    }
+    if ((s.brush || s.dynamic) && "complexStrokeProperties" in node) {
+      try {
+        if (s.dynamic) node.complexStrokeProperties = { type: "DYNAMIC", frequency: s.dynamic.frequency || 1, wiggle: s.dynamic.wiggle || 1, smoothen: s.dynamic.smoothen === void 0 ? 0.5 : s.dynamic.smoothen };
+        else {
+          var bname = String(s.brush.name || s.brush).toUpperCase();
+          var scatter = ["BUBBLEGUM", "WITCH_HOUSE", "SHOEGAZE", "HONKY_TONK", "SCREAMO", "DRONE", "DOO_WOP", "SPOKEN_WORD", "VAPORWAVE", "OI"].indexOf(bname) >= 0;
+          var btype = scatter ? "SCATTER" : "STRETCH";
+          if (!BRUSHES[btype]) {
+            await figma.loadBrushesAsync(btype);
+            BRUSHES[btype] = true;
+          }
+          node.complexStrokeProperties = scatter ? { type: "BRUSH", brushType: "SCATTER", brushName: bname, gap: s.brush.gap || 1, wiggle: s.brush.wiggle || 0, sizeJitter: s.brush.sizeJitter || 0, angularJitter: s.brush.angularJitter || 0, rotation: s.brush.rotation || 0 } : { type: "BRUSH", brushType: "STRETCH", brushName: bname, direction: s.brush.direction || "FORWARD" };
+        }
+      } catch (e) {
+        this.w("pincel/traço: " + (e && e.message || e));
+      }
+    }
+  };
+  Builder.prototype.size = async function(node, s, parent, isNew) {
+    var self = this;
+    var auto = parent && parent.layoutMode && parent.layoutMode !== "NONE";
+    var ax = async function(val, dim) {
+      var prop = dim === "w" ? "layoutSizingHorizontal" : "layoutSizingVertical";
+      if (val === "fill") {
+        if (auto) node[prop] = "FILL";
+        return;
+      }
+      if (val === "hug") {
+        if (node.type === "TEXT" || node.layoutMode && node.layoutMode !== "NONE") node[prop] = "HUG";
+        return;
+      }
+      var v = null;
+      if (typeof val === "string" && val[0] === "$") {
+        v = await getVar(val);
+        if (!v) return self.w("variável não achada: " + val);
+        val = Number(v.resolveForConsumer(node).value);
+      }
+      if (typeof val === "number") {
+        if (dim === "w") node.resize(val, node.height);
+        else node.resize(node.width, val);
+        if (auto || node.layoutMode && node.layoutMode !== "NONE") node[prop] = "FIXED";
+        if (v) node.setBoundVariable(dim === "w" ? "width" : "height", v);
+      }
+    };
+    await ax(s.w, "w");
+    await ax(s.h, "h");
+    if (isNew && node.type === "TEXT" && s.w === void 0 && !s.abs && parent && parent.layoutMode === "VERTICAL" && parent.layoutSizingHorizontal !== "HUG") {
+      node.layoutSizingHorizontal = "FILL";
+      node.textAutoResize = "HEIGHT";
+    }
+    if (s.abs && auto) node.layoutPositioning = "ABSOLUTE";
+    if (s.x !== void 0) node.x = s.x;
+    if (s.y !== void 0) node.y = s.y;
+  };
+  Builder.prototype.frame = async function(s) {
+    var f = figma.createFrame();
+    f.name = s.frame;
+    f.fills = [];
+    var layout = s.layout === void 0 ? "V" : s.layout;
+    if (layout !== "none") {
+      f.layoutMode = layout === "H" ? "HORIZONTAL" : "VERTICAL";
+      f.layoutSizingHorizontal = "HUG";
+      f.layoutSizingVertical = "HUG";
+      if (s.wrap) f.layoutWrap = "WRAP";
+      await this.num(f, "itemSpacing", s.gap);
+      if (s.pad !== void 0) {
+        var p = Array.isArray(s.pad) ? s.pad : [s.pad];
+        var t = p[0], r = p.length > 1 ? p[1] : p[0], b = p.length > 2 ? p[2] : p[0], l = p.length > 3 ? p[3] : r;
+        await this.num(f, "paddingTop", t);
+        await this.num(f, "paddingRight", r);
+        await this.num(f, "paddingBottom", b);
+        await this.num(f, "paddingLeft", l);
+      }
+      if (s.align) f.primaryAxisAlignItems = ALIGN[s.align] || "MIN";
+      if (s.cross) f.counterAxisAlignItems = ALIGN[s.cross] || "MIN";
+    }
+    await this.common(f, s);
+    return f;
+  };
+  Builder.prototype.typeRole = async function(t, s) {
+    var get = async function(name) {
+      var v = await getVar(name);
+      return v ? { v, val: v.resolveForConsumer(t).value } : null;
+    };
+    var type = s.type;
+    if (type.charAt(type.length - 1) === "/") type = type.slice(0, -1);
+    var strong = type.slice(-7) === "/strong";
+    if (strong) type = type.slice(0, -7);
+    var base = null, size = null;
+    var cands = [type + "/", "text/" + type + "/", "typography/" + type + "/", "font/" + type + "/"];
+    for (var i = 0; i < cands.length && !size; i++) {
+      size = await get(cands[i] + "font-size");
+      if (size) base = cands[i];
+    }
+    if (!size) {
+      this.w("papel tipográfico não achado: " + s.type);
+      return false;
+    }
+    var root = base.split("/")[0] + "/";
+    var fam = await get(base + "font-family") || await get(root + "font-family") || await get("typeface/default") || await get("font-family");
+    var lh = await get(base + "line-height");
+    var wt = strong && await get(base + "font-weight-emphasis") || await get(base + "font-weight");
+    var ls = await get(base + "letter-spacing");
+    var family = fam ? String(fam.val) : "Inter";
+    var weight = wt ? Number(wt.val) : 400;
+    var font = { family, style: WEIGHT[weight] || "Regular" };
+    try {
+      await figma.loadFontAsync(font);
+    } catch (e) {
+      font = { family, style: font.style.replace(" ", "") };
+      try {
+        await figma.loadFontAsync(font);
+      } catch (e2) {
+        this.w("fonte indisponível " + family + " " + weight + ", usando Inter");
+        font = { family: "Inter", style: WEIGHT[weight] || "Regular" };
+        await figma.loadFontAsync(font);
+      }
+    }
+    t.fontName = font;
+    t.setBoundVariable("fontSize", size.v);
+    if (lh) t.setBoundVariable("lineHeight", lh.v);
+    if (ls) t.letterSpacing = { value: Number(ls.val), unit: "PERCENT" };
+    try {
+      if (fam) t.setBoundVariable("fontFamily", fam.v);
+      if (wt) t.setBoundVariable("fontWeight", wt.v);
+    } catch (e) {
+      this.w(s.type + ": família/peso ficaram fixos (" + e.message + ")");
+    }
+    return true;
+  };
+  Builder.prototype.text = async function(s) {
+    var t = figma.createText();
+    var typed = s.type && await this.typeRole(t, s);
+    if (!typed) {
+      var font = { family: s.font || "Inter", style: WEIGHT[s.weight] || s.weight || "Regular" };
+      var style = null;
+      if (s.style) {
+        style = await getStyle("text", s.style);
+        if (style) font = style.fontName;
+        else this.w("estilo de texto não achado: " + s.style);
+      }
+      try {
+        await figma.loadFontAsync(font);
+      } catch (e) {
+        this.w("fonte indisponível " + font.family + " " + font.style + ", usando Inter");
+        font = { family: "Inter", style: "Regular" };
+        await figma.loadFontAsync(font);
+        style = null;
+      }
+      if (style) await t.setTextStyleIdAsync(style.id);
+      else t.fontName = font;
+      if (s.size && !style) t.fontSize = s.size;
+    }
+    t.characters = String(s.text);
+    t.name = s.n || String(s.text).slice(0, 30);
+    if (s.color) {
+      var p = await this.paint(s.color);
+      if (p) t.fills = [p];
+    }
+    if (s.align) t.textAlignHorizontal = s.align.toUpperCase() === "START" ? "LEFT" : s.align.toUpperCase();
+    t.textAutoResize = s.w !== void 0 ? "HEIGHT" : "WIDTH_AND_HEIGHT";
+    return t;
+  };
+  Builder.prototype.inst = async function(s) {
+    var ref = s.inst;
+    var self = this;
+    var e = /^[0-9a-f]{40}$/i.test(ref) ? { key: ref, set: null } : lookup((await index()).comps, ref);
+    if (!e) {
+      this.w("componente não achado: " + ref);
+      return null;
+    }
+    var main = e.id ? await figma.getNodeByIdAsync(e.id) : null;
+    if (!main) {
+      try {
+        main = e.set === false ? await figma.importComponentByKeyAsync(e.key) : await figma.importComponentSetByKeyAsync(e.key);
+      } catch (err) {
+        main = await figma.importComponentByKeyAsync(e.key);
+      }
+    }
+    var comp = main.type === "COMPONENT_SET" ? main.defaultVariant || main.children[0] : main;
+    var node = comp.createInstance();
+    if (s.n) node.name = s.n;
+    if (s.props) {
+      var defs = node.componentProperties;
+      var set = {};
+      Object.keys(s.props).forEach(function(name) {
+        var want = name.toLowerCase();
+        var real = Object.keys(defs).filter(function(k) {
+          return k.split("#")[0].toLowerCase() === want;
+        })[0];
+        if (real) set[real] = s.props[name];
+        else self.w(ref + ": prop não existe: " + name);
+      });
+      var hasText = Object.keys(set).some(function(k) {
+        return defs[k].type === "TEXT";
+      });
+      if (hasText) {
+        var texts = node.findAllWithCriteria({ types: ["TEXT"] });
+        for (var i = 0; i < texts.length; i++) if (texts[i].fontName !== figma.mixed) await figma.loadFontAsync(texts[i].fontName);
+      }
+      try {
+        node.setProperties(set);
+      } catch (err) {
+        this.w(ref + ": " + err.message);
+      }
+    }
+    await this.common(node, s);
+    return node;
+  };
+  Builder.prototype.recolor = async function(node, color) {
+    var p = await this.paint(color);
+    if (!p) return;
+    var all = [node].concat("findAll" in node ? node.findAll(function() {
+      return true;
+    }) : []);
+    all.forEach(function(n) {
+      if (n.type === "FRAME" || n.type === "GROUP") return;
+      if (Array.isArray(n.fills) && n.fills.length) n.fills = [p];
+      if (Array.isArray(n.strokes) && n.strokes.length) n.strokes = [p];
+    });
+  };
+  Builder.prototype.anim = async function(node, a) {
+    if (!a) return;
+    try {
+      var delay = a.delay || 0;
+      if (a.style) {
+        var want = String(a.style).toLowerCase();
+        var styles = figma.motion.figmaAnimationStyles();
+        var st = styles.filter(function(x) {
+          return String(x.name).toLowerCase() === want;
+        })[0];
+        if (!st) this.w('estilo de animação "' + a.style + '" não existe; disponíveis: ' + styles.map(function(x) {
+          return x.name;
+        }).join(", "));
+        else {
+          var cfg = { timelineOffset: delay };
+          if (a.dur !== void 0) cfg.duration = a.dur;
+          if (a.props) cfg.props = a.props;
+          node.applyAnimationStyle(st.styleId, cfg);
+        }
+      }
+      if (a.keys) {
+        Object.keys(a.keys).forEach(function(k) {
+          node.applyManualKeyframeTrack({ type: "PROPERTY", name: k.toUpperCase() }, {
+            keyframes: a.keys[k].map(function(pt, i) {
+              var xy = k.toUpperCase().slice(-3) === "_XY";
+              var val = Array.isArray(pt[1]) ? { x: pt[1][0], y: pt[1][1] } : { x: pt[1], y: pt[1] };
+              var kf = { timelinePosition: pt[0] + delay, value: xy ? { type: "VECTOR", value: val } : { type: "FLOAT", value: pt[1] } };
+              if (i) kf.easing = { type: String(pt[2] || a.ease || "EASE_OUT").toUpperCase() };
+              return kf;
+            })
+          });
+        });
+      }
+      if (a.total && node.timelines && node.timelines[0]) node.setTimelineDuration(node.timelines[0].id, a.total);
+    } catch (e) {
+      var m = String(e && e.message || e);
+      this.w(m.indexOf("not a supported API") >= 0 ? "animação: o Motion da Figma não está liberado nesta conta" : "animação: " + m);
+    }
+  };
+  function rng(seed) {
+    var a = seed | 0;
+    return function() {
+      a = a + 1831565813 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  Builder.prototype.scatter = async function(s, parent) {
+    var box = figma.createFrame();
+    box.name = s.n || s.scatter;
+    box.fills = [];
+    box.clipsContent = false;
+    var area = s.area || [parent ? parent.width : 400, parent ? parent.height : 400];
+    box.resize(area[0], area[1]);
+    var r = rng(s.seed === void 0 ? 1 : s.seed);
+    var lerp = function(v, t) {
+      return Array.isArray(v) ? v[0] + (v[1] - v[0]) * t : v;
+    };
+    var paint = await this.paint(s.fill === void 0 ? "#FFFFFF" : s.fill);
+    var item = s.item || String(s.scatter).replace(/s$/, "");
+    var shift = s.shift || 0;
+    for (var i = 0; i < (s.count || 50); i++) {
+      var x = r() * area[0], y = r() * area[1], d = lerp(s.size === void 0 ? [1, 3] : s.size, r()), o = lerp(s.o === void 0 ? 1 : s.o, r());
+      var e = figma.createEllipse();
+      e.name = item + " " + (i + 1);
+      e.resize(d, d);
+      e.x = ((x + shift) % area[0] + area[0]) % area[0];
+      e.y = y;
+      e.opacity = o;
+      e.fills = paint ? [paint] : [];
+      box.appendChild(e);
+      this.count++;
+    }
+    return box;
+  };
+  Builder.prototype.node = async function(s, parent) {
+    var n = null;
+    if (s.d !== void 0) {
+      var sd = {};
+      Object.keys(s).forEach(function(k) {
+        sd[k] = s[k];
+      });
+      if (sd.w === void 0) sd.w = s.d;
+      if (sd.h === void 0) sd.h = s.d;
+      s = sd;
+    }
+    if (s.scatter !== void 0) {
+      n = await this.scatter(s, parent);
+      this.count++;
+      if (parent) parent.appendChild(n);
+      if (parent && parent.layoutMode && parent.layoutMode !== "NONE") n.layoutPositioning = "ABSOLUTE";
+      n.x = s.x || 0;
+      n.y = s.y || 0;
+      return n;
+    }
+    if (s.frame !== void 0) n = await this.frame(s);
+    else if (s.text !== void 0) n = await this.text(s);
+    else if (s.inst !== void 0) n = await this.inst(s);
+    else if (s.rect !== void 0) {
+      n = figma.createRectangle();
+      n.name = s.n || s.rect || "Retângulo";
+      n.fills = [];
+      await this.common(n, s);
+    } else if (s.ellipse !== void 0) {
+      n = figma.createEllipse();
+      n.name = s.n || s.ellipse || "Elipse";
+      n.fills = [];
+      await this.common(n, s);
+    } else if (s.svg !== void 0) {
+      n = figma.createNodeFromSvg(String(s.svg));
+      n.name = s.n || "Ícone";
+      if (s.color) await this.recolor(n, s.color);
+      var sv = {};
+      Object.keys(s).forEach(function(k) {
+        if (k !== "fill") sv[k] = s[k];
+      });
+      await this.common(n, sv);
+    } else if (s.path !== void 0) {
+      n = figma.createVector();
+      n.vectorPaths = [{ windingRule: "NONZERO", data: String(s.path) }];
+      n.name = s.n || "Desenho";
+      n.fills = [];
+      await this.common(n, s);
+      if (s.onPath !== void 0) {
+        var tf = { family: s.font || "Inter", style: WEIGHT[s.weight] || "Regular" };
+        await figma.loadFontAsync(tf);
+        n = figma.createTextPath(n, 0, 0);
+        n.fontName = tf;
+        if (s.size) n.fontSize = s.size;
+        n.characters = String(s.onPath);
+        if (s.color) {
+          var tp = await this.paint(s.color);
+          if (tp) n.fills = [tp];
+        }
+      }
+    } else if (s.clone !== void 0) {
+      var src = await figma.getNodeByIdAsync(s.clone);
+      if (src) n = src.clone();
+      else this.w("clone: nó não achado " + s.clone);
+    } else {
+      this.w("nó sem tipo: " + JSON.stringify(s).slice(0, 60));
+      return null;
+    }
+    if (!n) return null;
+    if (s.n) n.name = s.n;
+    this.count++;
+    if (parent) parent.appendChild(n);
+    await this.size(n, s, parent, true);
+    if (s.note !== void 0) await setNotes(this, n, s.note, false);
+    if (s.anim) await this.anim(n, s.anim);
+    if (s.children && "appendChild" in n) {
+      for (var i = 0; i < s.children.length; i++) {
+        var c = s.children[i];
+        if (s.def) {
+          var m = {};
+          Object.keys(s.def).forEach(function(k) {
+            m[k] = s.def[k];
+          });
+          Object.keys(c).forEach(function(k) {
+            m[k] = c[k];
+          });
+          c = m;
+        }
+        await this.node(c, n);
+      }
+    }
+    return n;
+  };
+  async function build(spec, parentId) {
+    var b = new Builder();
+    var parent = parentId ? (await find(parentId))[0] || null : null;
+    if (parentId && !parent) throw new Error("nó pai não encontrado: " + parentId);
+    var onPage = null;
+    if (parent && parent.type === "PAGE") {
+      onPage = parent.name;
+      if (parent !== figma.currentPage) await figma.setCurrentPageAsync(parent);
+      parent = null;
+    }
+    var root = await b.node(spec, parent);
+    if (!root) throw new Error("nada criado: " + b.warn.join("; "));
+    if (!parent && spec.x === void 0) {
+      var right = 0;
+      figma.currentPage.children.forEach(function(c) {
+        if (c !== root) right = Math.max(right, c.x + c.width);
+      });
+      root.x = right ? right + 120 : 0;
+      root.y = 0;
+    }
+    try {
+      figma.currentPage.selection = [root];
+      figma.viewport.scrollAndZoomIntoView([root]);
+    } catch (e) {
+    }
+    var out = { v: V, id: root.id, nodes: b.count, size: Math.round(root.width) + "x" + Math.round(root.height), x: Math.round(root.x), y: Math.round(root.y) };
+    if (onPage) out.page = onPage + " (o id informado era a página: criado na raiz dela)";
+    if (b.warn.length) out.warn = b.warn;
+    return out;
+  }
+  function glob(name, pat) {
+    if (pat.indexOf("*") < 0) return name === pat;
+    var parts = pat.split("*");
+    if (name.indexOf(parts[0]) !== 0) return false;
+    var pos = parts[0].length;
+    for (var i = 1; i < parts.length; i++) {
+      if (i === parts.length - 1) return name.length - parts[i].length >= pos && name.slice(name.length - parts[i].length) === parts[i];
+      var at = name.indexOf(parts[i], pos);
+      if (at < 0) return false;
+      pos = at + parts[i].length;
+    }
+    return true;
+  }
+  async function find(ref, from) {
+    ref = String(ref);
+    if (/^[0-9]+:[0-9]+$/.test(ref)) {
+      var byId = await figma.getNodeByIdAsync(ref);
+      return byId ? [byId] : [];
+    }
+    var level = from ? [from] : null;
+    var segs = ref.split("/");
+    for (var i = 0; i < segs.length; i++) {
+      var next = [];
+      var pool = level ? [] : figma.currentPage.children.slice();
+      if (level) level.forEach(function(n) {
+        if ("children" in n) pool = pool.concat(n.children);
+      });
+      pool.forEach(function(c) {
+        if (glob(c.name, segs[i])) next.push(c);
+      });
+      level = next;
+    }
+    return level || [];
+  }
+  async function editNode(b, node, patch) {
+    if (patch.d !== void 0) {
+      if (patch.w === void 0) patch.w = patch.d;
+      if (patch.h === void 0) patch.h = patch.d;
+    }
+    if (patch.remove) {
+      node.remove();
+      return;
+    }
+    if (patch.detach) node = detach(b, node, patch.detach === "all");
+    if (patch.n) node.name = patch.n;
+    if (patch.notes !== void 0) await setNotes(b, node, patch.notes, true);
+    if (patch.note !== void 0) await setNotes(b, node, patch.note, false);
+    if (node.type === "TEXT") {
+      if (patch.type) await b.typeRole(node, patch);
+      if (patch.text !== void 0) {
+        if (node.fontName !== figma.mixed) await figma.loadFontAsync(node.fontName);
+        node.characters = String(patch.text);
+      }
+      if (patch.color) {
+        var p = await b.paint(patch.color);
+        if (p) node.fills = [p];
+      }
+    }
+    if (node.layoutMode !== void 0 && node.layoutMode !== "NONE") {
+      if (patch.layout) node.layoutMode = patch.layout === "H" ? "HORIZONTAL" : "VERTICAL";
+      await b.num(node, "itemSpacing", patch.gap);
+      if (patch.pad !== void 0) {
+        var pd = Array.isArray(patch.pad) ? patch.pad : [patch.pad];
+        var t = pd[0], r = pd.length > 1 ? pd[1] : pd[0], bt = pd.length > 2 ? pd[2] : pd[0], l = pd.length > 3 ? pd[3] : r;
+        await b.num(node, "paddingTop", t);
+        await b.num(node, "paddingRight", r);
+        await b.num(node, "paddingBottom", bt);
+        await b.num(node, "paddingLeft", l);
+      }
+      if (patch.align) node.primaryAxisAlignItems = ALIGN[patch.align] || "MIN";
+      if (patch.cross) node.counterAxisAlignItems = ALIGN[patch.cross] || "MIN";
+    }
+    var common = {};
+    ["fill", "stroke", "sw", "r", "o", "effect", "clip", "img", "img64", "imgErr", "fit", "brush", "dynamic"].forEach(function(k) {
+      if (patch[k] !== void 0) common[k] = patch[k];
+    });
+    if (common.sw !== void 0 && common.stroke === void 0) await b.num(node, "strokeWeight", common.sw);
+    await b.common(node, common);
+    if (patch.parent) {
+      var dest = await figma.getNodeByIdAsync(patch.parent);
+      if (!dest) throw new Error("nó pai não encontrado: " + patch.parent);
+      if (patch.index !== void 0) dest.insertChild(patch.index, node);
+      else dest.appendChild(node);
+    }
+    await b.size(node, patch, node.parent);
+    if (patch.anim) await b.anim(node, patch.anim);
+    return node;
+  }
+  function detach(b, node, deep) {
+    var n = node;
+    var count = 0;
+    if (n.type === "INSTANCE") {
+      n = n.detachInstance();
+      count++;
+    } else if (!deep) {
+      b.w("não é instância: " + n.name + ' (use detach:"all" pra desanexar as de dentro)');
+      return n;
+    }
+    if (deep && "findAll" in n) {
+      for (var guard = 0; guard < 2e3; guard++) {
+        var left = n.findAll(function(c) {
+          return c.type === "INSTANCE";
+        });
+        if (!left.length) break;
+        left[0].detachInstance();
+        count++;
+      }
+    }
+    b.detached = (b.detached || 0) + count;
+    return n;
+  }
+  var NOTE_COLORS = ["blue", "green", "orange", "violet", "teal", "pink", "yellow", "red"];
+  var NOTE_PROPS = { w: "width", h: "height", fill: "fills", stroke: "strokes", effect: "effects", sw: "strokeWeight", r: "cornerRadius", gap: "itemSpacing", pad: "padding", layout: "layoutMode", align: "alignItems", o: "opacity", font: "fontFamily", size: "fontSize", weight: "fontWeight", lh: "lineHeight", type: "textStyleId", comp: "mainComponent" };
+  var NOTE_CATS = null;
+  async function noteCat(label) {
+    if (!NOTE_CATS) NOTE_CATS = await figma.annotations.getAnnotationCategoriesAsync();
+    var want = String(label).toLowerCase();
+    for (var i = 0; i < NOTE_CATS.length; i++) if (NOTE_CATS[i].label.toLowerCase() === want) return NOTE_CATS[i].id;
+    var c = await figma.annotations.addAnnotationCategoryAsync({ label: String(label), color: NOTE_COLORS[NOTE_CATS.length % NOTE_COLORS.length] });
+    NOTE_CATS.push(c);
+    return c.id;
+  }
+  function cleanNote(a) {
+    var o = {};
+    if (a.labelMarkdown) o.labelMarkdown = a.labelMarkdown;
+    else if (a.label) o.label = a.label;
+    if (a.properties && a.properties.length) o.properties = a.properties.map(function(p) {
+      return { type: p.type };
+    });
+    if (a.categoryId) o.categoryId = a.categoryId;
+    return o;
+  }
+  async function setNotes(b, node, note, replace) {
+    if (!("annotations" in node)) {
+      b.w("anotação não vale neste tipo de nó: " + node.type + " " + node.name);
+      return;
+    }
+    if (note === false || note === null) {
+      node.annotations = [];
+      return;
+    }
+    var list = replace ? [] : (node.annotations || []).map(cleanNote);
+    var items = Array.isArray(note) ? note : [note];
+    for (var i = 0; i < items.length; i++) {
+      var it = typeof items[i] === "string" ? { text: items[i] } : items[i];
+      var a = {};
+      if (it.text) a.labelMarkdown = String(it.text);
+      if (it.props) a.properties = [].concat(it.props).map(function(p) {
+        return { type: NOTE_PROPS[p] || p };
+      });
+      if (it.cat) {
+        try {
+          a.categoryId = await noteCat(it.cat);
+        } catch (e) {
+          b.w("categoria de anotação: " + (e && e.message || e));
+        }
+      }
+      if (!a.labelMarkdown && !a.properties) {
+        b.w("anotação vazia ignorada em " + node.name);
+        continue;
+      }
+      list.push(a);
+    }
+    node.annotations = list;
+  }
+  function pageRef(ref) {
+    var pages2 = figma.root.children;
+    var r = String(ref);
+    for (var i = 0; i < pages2.length; i++) if (pages2[i].id === r || pages2[i].name === r) return pages2[i];
+    for (var j = 0; j < pages2.length; j++) if (glob(pages2[j].name, r)) return pages2[j];
+    throw new Error("página não encontrada: " + r + " (há: " + pages2.map(function(p) {
+      return p.name;
+    }).join(", ") + ")");
+  }
+  async function pages(o) {
+    o = o || {};
+    if (o.move) {
+      var mv = pageRef(o.move.page || o.move.id);
+      figma.root.insertChild(Math.max(0, Math.min(o.move.index || 0, figma.root.children.length - 1)), mv);
+    }
+    if (o.go) {
+      var dest = pageRef(o.go);
+      if (dest !== figma.currentPage) await figma.setCurrentPageAsync(dest);
+    }
+    var lines = [];
+    var list = figma.root.children;
+    var max = o.max || 40;
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      var line = i + 1 + ". " + p.id + ' "' + p.name + '"' + (p === figma.currentPage ? " ← atual" : "");
+      if (!o.frames) {
+        lines.push(line);
+        continue;
+      }
+      if (p !== figma.currentPage && p.loadAsync) await p.loadAsync();
+      var tops = p.children.slice();
+      tops.sort(function(a, c) {
+        var band = Math.min(a.height || 0, c.height || 0) / 2;
+        return Math.abs(a.y - c.y) > band ? a.y - c.y : a.x - c.x;
+      });
+      lines.push(line + " (" + tops.length + " no 1º nível)");
+      tops.slice(0, max).forEach(function(n, k) {
+        lines.push("   " + (k + 1) + ") " + n.id + " " + n.type + ' "' + n.name + '"' + ("width" in n ? " " + Math.round(n.width) + "x" + Math.round(n.height) + " @" + Math.round(n.x) + "," + Math.round(n.y) : ""));
+      });
+      if (tops.length > max) lines.push("   … +" + (tops.length - max));
+    }
+    return lines.join(NL);
+  }
+  async function edit(ref, patch) {
+    var b = new Builder();
+    var items = Array.isArray(ref) ? ref : [{ id: ref, patch }];
+    var done = 0;
+    var last = null;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var nodes = await find(it.id || it.path);
+      if (!nodes.length) {
+        b.w("não achado: " + (it.id || it.path));
+        continue;
+      }
+      for (var j = 0; j < nodes.length; j++) {
+        var pt = {};
+        Object.keys(it.patch || {}).forEach(function(k) {
+          pt[k] = it.patch[k];
+        });
+        try {
+          last = await editNode(b, nodes[j], pt) || nodes[j];
+          done++;
+        } catch (e) {
+          b.w("falhou " + (it.id || it.path) + " (" + nodes[j].name + "): " + (e && e.message || e));
+        }
+      }
+    }
+    var out = { v: V, edited: done };
+    if (last && !last.removed && items.length === 1 && done === 1) {
+      try {
+        out.id = last.id;
+        out.size = Math.round(last.width) + "x" + Math.round(last.height);
+        out.x = Math.round(last.x);
+        out.y = Math.round(last.y);
+      } catch (e) {
+      }
+    }
+    if (b.detached) out.detached = b.detached;
+    if (b.warn.length) out.warn = b.warn;
+    return out;
+  }
+  async function variant(srcRef, o) {
+    o = o || {};
+    if (Array.isArray(o.variants)) {
+      var made = [];
+      var warns = [];
+      for (var vi = 0; vi < o.variants.length; vi++) {
+        var r = await variant(srcRef, o.variants[vi]);
+        made.push({ id: r.id, name: r.name, patched: r.patched });
+        if (r.warn) warns = warns.concat(r.warn);
+      }
+      var all = { v: V, created: made };
+      if (warns.length) all.warn = warns.slice(0, 15);
+      return all;
+    }
+    var b = new Builder();
+    var src = (await find(srcRef))[0];
+    if (!src) throw new Error("tela de origem não achada: " + srcRef);
+    var copy = src.clone();
+    if (o.name) copy.name = o.name;
+    if (o.x === void 0 && copy.parent && copy.parent.type === "PAGE") {
+      var right = 0;
+      copy.parent.children.forEach(function(c) {
+        if (c !== copy) right = Math.max(right, c.x + c.width);
+      });
+      copy.x = right + 120;
+      copy.y = src.y;
+    } else if (o.x !== void 0) {
+      copy.x = o.x;
+      copy.y = o.y === void 0 ? src.y : o.y;
+    }
+    var patches = o.patches || {};
+    var done = 0;
+    var keys = Object.keys(patches);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var nodes = k.indexOf("/") >= 0 ? await find(k, copy) : copy.findAll(function(n) {
+        return n.name === k;
+      });
+      if (!nodes.length) {
+        b.w("camada não achada: " + k);
+        continue;
+      }
+      for (var j = 0; j < nodes.length; j++) {
+        var pt = {};
+        Object.keys(patches[k]).forEach(function(x) {
+          pt[x] = patches[k][x];
+        });
+        try {
+          await editNode(b, nodes[j], pt);
+          done++;
+        } catch (e) {
+          b.w("falhou " + k + ": " + (e && e.message || e));
+        }
+      }
+    }
+    var out = { v: V, id: copy.id, name: copy.name, patched: done, x: Math.round(copy.x), y: Math.round(copy.y) };
+    if (b.warn.length) out.warn = b.warn;
+    return out;
+  }
+  var TRIGGER = { click: "ON_CLICK", hover: "ON_HOVER", press: "ON_PRESS", drag: "ON_DRAG" };
+  var TRANSITION = { smart: "SMART_ANIMATE", dissolve: "DISSOLVE", move: "MOVE_IN", push: "PUSH", slide: "SLIDE_IN" };
+  async function link(list) {
+    list = Array.isArray(list) ? list : [list];
+    var b = new Builder();
+    var done = 0;
+    for (var i = 0; i < list.length; i++) {
+      var l = list[i];
+      var from = (await find(l.from))[0];
+      var to = (await find(l.to))[0];
+      if (!from || !to) {
+        b.w("link: não achado " + (!from ? l.from : l.to));
+        continue;
+      }
+      var trig = String(l.trigger || "click").toLowerCase();
+      var trigger = trig === "delay" ? { type: "AFTER_TIMEOUT", timeout: l.ms === void 0 ? 800 : l.ms } : { type: TRIGGER[trig] || "ON_CLICK" };
+      var anim = String(l.animation || "smart").toLowerCase();
+      var transition = anim === "instant" ? null : { type: TRANSITION[anim] || "SMART_ANIMATE", easing: { type: String(l.easing || "EASE_OUT").toUpperCase() }, duration: l.duration === void 0 ? 0.4 : l.duration };
+      if (transition && transition.type !== "SMART_ANIMATE" && transition.type !== "DISSOLVE") {
+        transition.direction = String(l.direction || "LEFT").toUpperCase();
+        transition.matchLayers = false;
+      }
+      var keep = (from.reactions || []).filter(function(r) {
+        return !r.trigger || r.trigger.type !== trigger.type;
+      });
+      try {
+        await from.setReactionsAsync(keep.concat([{ trigger, actions: [{ type: "NODE", destinationId: to.id, navigation: "NAVIGATE", transition, resetScrollPosition: true }] }]));
+        done++;
+      } catch (e) {
+        b.w("falhou link " + l.from + " → " + l.to + ": " + (e && e.message || e));
+      }
+    }
+    var out = { v: V, linked: done };
+    if (b.warn.length) out.warn = b.warn;
+    return out;
+  }
+  async function inspect(id, depth) {
+    var root = await figma.getNodeByIdAsync(id);
+    if (!root) throw new Error("nó não encontrado: " + id);
+    var names = {};
+    var vn = async function(alias) {
+      if (!alias || !alias.id) return null;
+      if (!names[alias.id]) {
+        var v = await figma.variables.getVariableByIdAsync(alias.id);
+        names[alias.id] = v ? "$" + v.name : "?";
+      }
+      return names[alias.id];
+    };
+    var paintStr = async function(ps) {
+      if (!Array.isArray(ps) || !ps.length) return null;
+      var p = ps[0];
+      if (p.boundVariables && p.boundVariables.color) return await vn(p.boundVariables.color);
+      if (p.type === "SOLID") return rgbToHex({ r: p.color.r, g: p.color.g, b: p.color.b, a: p.opacity === void 0 ? 1 : p.opacity });
+      return p.type.toLowerCase();
+    };
+    var num = async function(n, field, alias) {
+      var b = n.boundVariables && n.boundVariables[alias || field];
+      var name = b ? await vn(Array.isArray(b) ? b[0] : b) : null;
+      var v = n[field];
+      if (v === void 0 || v === figma.mixed) return null;
+      return name ? name + "(" + Math.round(v * 100) / 100 + ")" : String(Math.round(v * 100) / 100);
+    };
+    var lines = [];
+    var max = 150;
+    var walk = async function(n, d) {
+      if (lines.length >= max) return;
+      var parts = ["  ".repeat(d) + n.type + ' "' + n.name + '"'];
+      if ("width" in n) parts.push(Math.round(n.width) + "x" + Math.round(n.height) + " @" + Math.round(n.x) + "," + Math.round(n.y));
+      if (n.layoutMode && n.layoutMode !== "NONE") {
+        parts.push(n.layoutMode === "HORIZONTAL" ? "row" : "col");
+        var g = await num(n, "itemSpacing");
+        if (g && g !== "0") parts.push("gap=" + g);
+        var pads = [await num(n, "paddingTop"), await num(n, "paddingRight"), await num(n, "paddingBottom"), await num(n, "paddingLeft")];
+        if (pads.some(function(x) {
+          return x && x !== "0";
+        })) parts.push("pad=" + pads.join(" "));
+        parts.push("align=" + n.primaryAxisAlignItems.toLowerCase() + "/" + n.counterAxisAlignItems.toLowerCase());
+      }
+      if ("layoutSizingHorizontal" in n) parts.push("sizing=" + n.layoutSizingHorizontal.toLowerCase() + "/" + n.layoutSizingVertical.toLowerCase());
+      var f = await paintStr(n.fills);
+      if (f && n.type !== "TEXT") parts.push("fill=" + f);
+      var st = await paintStr(n.strokes);
+      if (st) parts.push("stroke=" + st + " " + await num(n, "strokeWeight"));
+      var r = await num(n, "topLeftRadius");
+      if (r && r !== "0") parts.push("r=" + r);
+      if (n.opacity !== void 0 && n.opacity < 1) parts.push("o=" + Math.round(n.opacity * 100) / 100);
+      if (n.type === "TEXT") {
+        parts.push("«" + n.characters.slice(0, 80) + "»");
+        parts.push("color=" + await paintStr(n.fills));
+        var fs = await num(n, "fontSize");
+        var lh = n.lineHeight && n.lineHeight.unit === "PIXELS" ? Math.round(n.lineHeight.value) : "auto";
+        var lhb = n.boundVariables && n.boundVariables.lineHeight ? await vn(n.boundVariables.lineHeight) + "(" + lh + ")" : lh;
+        var fn = n.fontName !== figma.mixed ? n.fontName.family + " " + n.fontName.style : "misto";
+        parts.push("font=" + fn + " size=" + fs + " lh=" + lhb);
+      }
+      if (n.type === "INSTANCE") {
+        var main = await n.getMainComponentAsync();
+        if (main) parts.push("inst=" + (main.parent && main.parent.type === "COMPONENT_SET" ? main.parent.name : main.name));
+      }
+      if (n.annotations && n.annotations.length) parts.push("note«" + n.annotations.map(function(a) {
+        return (a.label || a.labelMarkdown || "") + (a.properties && a.properties.length ? " [" + a.properties.map(function(q) {
+          return q.type;
+        }).join(",") + "]" : "");
+      }).join(" | ").slice(0, 200) + "»");
+      lines.push(parts.join(" "));
+      if (d < depth && "children" in n) for (var i = 0; i < n.children.length; i++) await walk(n.children[i], d + 1);
+      else if ("children" in n && n.children.length) lines[lines.length - 1] += " (+" + n.children.length + " filhos)";
+    };
+    await walk(root, 0);
+    if (lines.length >= max) lines.push("… cortado em " + max + " linhas");
+    return lines.join(NL);
+  }
+  async function component(o) {
+    var toComp = async function(id) {
+      var n = await figma.getNodeByIdAsync(id);
+      if (!n) throw new Error("nó não encontrado: " + id);
+      return n.type === "COMPONENT" || n.type === "COMPONENT_SET" ? n : figma.createComponentFromNode(n);
+    };
+    var target;
+    if (o.ids && o.ids.length) {
+      var comps = [];
+      for (var i = 0; i < o.ids.length; i++) comps.push(await toComp(o.ids[i]));
+      target = figma.combineAsVariants(comps, comps[0].parent || figma.currentPage);
+    } else target = await toComp(o.id);
+    if (o.n) target.name = o.n;
+    var added = [];
+    if (o.props) Object.keys(o.props).forEach(function(k) {
+      var raw = String(o.props[k]);
+      var cut = raw.indexOf(":");
+      var type = (cut > 0 ? raw.slice(0, cut) : "TEXT").toUpperCase();
+      var val = cut > 0 ? raw.slice(cut + 1) : raw;
+      added.push(target.addComponentProperty(k, type, type === "BOOLEAN" ? val === "true" : val));
+    });
+    return { v: V, id: target.id, type: target.type, ref: target.key, props: added };
+  }
+  async function locate(pattern, max) {
+    var nodes = await find(pattern);
+    var lines = nodes.slice(0, max || 60).map(function(n) {
+      var p = [];
+      for (var c = n; c && c.type !== "PAGE"; c = c.parent) p.unshift(c.name);
+      return p.join("/") + " " + n.id + " " + n.type + ("width" in n ? " " + Math.round(n.width) + "x" + Math.round(n.height) : "");
+    });
+    if (nodes.length > lines.length) lines.push("… +" + (nodes.length - lines.length) + " nós");
+    return lines.join(NL) || "nada casa com " + pattern;
+  }
+  return { v: V, build, edit, variant, link, locate, catalog, reindex, inspect, component, pages };
+};`;
+let h = 0;
+for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+if (h !== -1550422927) return { erro: 'cópia corrompida (' + s.length + ' de 50797 caracteres): chame a instalação de novo e cole o código sem alterar nada' };
+figma.root.setSharedPluginData('lite', 'lib', s);
+return { v: new Function(s + ';return L')()(figma).v, len: s.length };
