@@ -5,8 +5,12 @@
 
 // Roda em segundo plano: a ui.html fica invisível (só segura o WebSocket) e o
 // estado aparece numa notificação fixa no rodapé, com botão pra parar.
-figma.showUI(__html__, { visible: false });
-figma.ui.postMessage({ info: { file: figma.root.name } });
+// Exceção: no Dev Mode o plugin vive no painel Inspect e a Figma exige uma UI
+// visível ali. Nesse caso a mesma ui.html mostra um painel pequeno com o estado
+// da conexão e, enquanto o agente não conecta, como instalar no Claude.
+const PANEL = figma.editorType === 'dev';
+figma.showUI(__html__, PANEL ? { visible: true, themeColors: true, width: 300, height: 280 } : { visible: false });
+figma.ui.postMessage({ info: { file: figma.root.name }, panel: PANEL });
 
 // Botão "Conectar figma-mcp-lite" no painel da direita deste arquivo (aparece
 // sem nada selecionado): na próxima vez, abrir o arquivo e clicar. A Figma não

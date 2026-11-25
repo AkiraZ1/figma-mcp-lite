@@ -1,10 +1,43 @@
+<!-- Painel só no Dev Mode (a Figma exige UI visível no painel Inspect). No
+modo Design a janela continua invisível e nada disto aparece. -->
+<style>
+  body { margin: 0; font: 12px/1.45 Inter, system-ui, sans-serif; color: var(--figma-color-text, #222); background: var(--figma-color-bg, #fff); }
+  #p { padding: 12px 14px; }
+  #p[hidden], #how[hidden] { display: none; }
+  .st { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--figma-color-icon-warning, #f5a623); }
+  .on .dot { background: var(--figma-color-icon-success, #14ae5c); }
+  ol { margin: 6px 0 0; padding-left: 18px; }
+  li { margin-bottom: 4px; }
+  code { font: 11px ui-monospace, Menlo, monospace; background: var(--figma-color-bg-secondary, #f0f0f0); padding: 1px 4px; border-radius: 3px; word-break: break-all; }
+  .mut { color: var(--figma-color-text-secondary, #777); }
+</style>
+<div id="p" hidden>
+  <div class="st" id="st"><span class="dot"></span><span id="txt">aguardando o agente</span></div>
+  <div id="ok" class="mut" hidden>Peça a tela no Claude. Dev Mode só lê: pra criar ou editar, abra o arquivo no modo Design.</div>
+  <div id="how">
+    <div class="mut">Ainda sem agente conectado. Pra usar com o Claude:</div>
+    <ol>
+      <li>No Claude Code: <code>/plugin marketplace add AkiraZ1/figma-mcp-lite</code> e depois <code>/plugin install figma-mcp-lite@figma-mcp-lite</code>.</li>
+      <li>Precisa do Node.js LTS (nodejs.org). Depois de instalar, feche o app Claude por completo e abra de novo.</li>
+      <li>Peça a tela no Claude com o link deste arquivo. Este painel muda pra "conectado".</li>
+    </ol>
+  </div>
+</div>
 <script>
-  // Invisível: só segura a conexão com o servidor local figma-mcp-lite e avisa
+  // No modo Design fica invisível: só segura a conexão com o servidor local figma-mcp-lite e avisa
   // o code.js quando o estado muda (o code.js mostra na notificação do rodapé).
   const PORT = 3055;
   let ws = null;
   let info = null;
-  const state = (s) => parent.postMessage({ pluginMessage: { state: s } }, '*');
+  const state = (s) => {
+    parent.postMessage({ pluginMessage: { state: s } }, '*');
+    const on = ws && ws.readyState === 1;
+    document.getElementById('txt').textContent = s;
+    document.getElementById('st').className = 'st' + (on ? ' on' : '');
+    document.getElementById('how').hidden = on;
+    document.getElementById('ok').hidden = !on;
+  };
 
   function connect() {
     // O manifest do Figma só aceita nome de host (IP é "URL inválida"); o
@@ -25,7 +58,12 @@
   onmessage = (e) => {
     const msg = e.data.pluginMessage;
     if (!msg) return;
-    if (msg.info) { info = msg.info; if (!ws) connect(); return; }
+    if (msg.info) {
+      info = msg.info;
+      if (msg.panel) document.getElementById('p').hidden = false;
+      if (!ws) connect();
+      return;
+    }
     if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
   };
 </script>

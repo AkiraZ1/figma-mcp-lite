@@ -1,5 +1,5 @@
 var L = function(figma) {
-  var V = "0.7.1";
+  var V = "0.7.2";
   var NS = "lite";
   var NL = [10].map(function(c) {
     return String.fromCharCode(c);
