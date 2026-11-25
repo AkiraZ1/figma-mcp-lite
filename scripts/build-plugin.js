@@ -103,3 +103,88 @@ copy('assets/icon.png', '.claude-plugin/icon.png');
 copy('LICENSE', 'LICENSE');
 const size = (d) => fs.readdirSync(d, { withFileTypes: true }).reduce((n, e) => n + (e.isDirectory() ? size(path.join(d, e.name)) : fs.statSync(path.join(d, e.name)).size), 0);
 console.log(`dist-plugin/ v${pkg.version}: ${Math.round(size(OUT) / 1024)} KB`);
+
+// ─── dist-directory/: versão do diretório público de plugins do Claude ──────
+// O diretório não aceita código local de organização não verificada: nada de
+// hooks de comando, servidor MCP local nem arquivos .js/.mjs/.sh (ou com #!).
+// Só Markdown/JSON/imagem. Então esta versão é só o modo remoto (skill pelo
+// conector Figma), com o código de instalação do builder dentro de um .md.
+// A versão completa (servidor local + subagente) segue no marketplace do GitHub.
+const DIR = path.join(ROOT, 'dist-directory');
+fs.rmSync(DIR, { recursive: true, force: true });
+const dwrite = (rel, text) => { fs.mkdirSync(path.dirname(path.join(DIR, rel)), { recursive: true }); fs.writeFileSync(path.join(DIR, rel), text); };
+const FULL = 'Versão completa (servidor local, mais rápida e sem depender do conector): no Claude Code, `/plugin marketplace add AkiraZ1/figma-mcp-lite` e depois `/plugin install figma-mcp-lite@figma-mcp-lite`.';
+
+const manifest = JSON.parse(fs.readFileSync(path.join(OUT, '.claude-plugin/plugin.json'), 'utf8'));
+manifest.description = 'Telas no Figma gastando ~10x menos contexto: spec JSON numa chamada só pelo conector Figma, com as variáveis do design system das bibliotecas do próprio arquivo.';
+manifest.keywords = ['figma', 'design-system', 'variables', 'skill'];
+dwrite('.claude-plugin/plugin.json', JSON.stringify(manifest, null, 2) + '\n');
+fs.copyFileSync(path.join(ROOT, 'assets/icon.png'), path.join(DIR, '.claude-plugin/icon.png'));
+fs.copyFileSync(path.join(ROOT, 'LICENSE'), path.join(DIR, 'LICENSE'));
+
+const skill = fs.readFileSync(path.join(OUT, 'skills/figma-lite/SKILL.md'), 'utf8');
+const OLD_INSTALL = 'leia o arquivo `install.js` desta skill e passe o conteúdo dele, **sem mudar nada**, como `code` de um `use_figma`';
+const OLD_SUB = '- **Claude Code ou Cowork com o subagente `figma-lite` disponível:** não use esta skill. Delegue o pedido inteiro ao subagente.\n';
+const OLD_CHAT = '- **Chat (claude.ai):** use o fluxo abaixo.';
+for (const s of [OLD_INSTALL, OLD_SUB, OLD_CHAT]) if (!skill.includes(s)) throw new Error('SKILL.head.md mudou; ajuste o dist-directory: ' + s.slice(0, 40));
+dwrite('skills/figma-lite/SKILL.md', skill
+  .replace(OLD_INSTALL, 'leia o arquivo `install.md` desta skill e passe o código do bloco entre as linhas `~~~~`, **sem mudar nada** (sem as linhas `~~~~`), como `code` de um `use_figma`')
+  .replace(OLD_SUB, '')
+  .replace(OLD_CHAT, '- Use o fluxo abaixo em qualquer cliente (claude.ai, app Claude, Claude Code).'));
+const inst = fs.readFileSync(path.join(ROOT, 'dist/install.js'), 'utf8');
+if (inst.includes('~~~~')) throw new Error('install.js contém ~~~~: troque a cerca do install.md');
+dwrite('skills/figma-lite/install.md', `# Instalação do builder (modo remoto)
+
+Copie o código entre as cercas \`~~~~\` exatamente como está, sem as cercas, como \`code\` de uma chamada \`use_figma\`. Ele grava o builder no arquivo aberto (dado do plugin "lite") e confere a cópia por hash.
+
+~~~~js
+${inst.trimEnd()}
+~~~~
+`);
+dwrite('skills/ativar/SKILL.md', `---
+name: ativar
+description: Ativa o figma-lite nesta conversa no lugar das skills nativas da Figma e confere se o conector Figma está ligado.
+disable-model-invocation: true
+---
+
+# Ativar o figma-lite nesta conversa
+
+A partir de agora, **nesta conversa**, todo pedido que envolva o Figma ou um link figma.com segue a skill \`figma-lite\` deste plugin, no lugar das skills nativas da Figma (figma-use, figma-generate-design, figma-design-to-code). Não carregue nem sugira essas skills.
+
+1. Veja se você tem a ferramenta \`use_figma\` (conector Figma). Esta versão usa o conector como transporte.
+   - **Não tem:** peça pra ligar o conector **Figma** em Configurações → Conectores e voltar à conversa.
+   - **Tem:** está pronto. Na primeira tela de cada arquivo a skill instala o builder, uma vez só.
+2. Se existir o plugin \`figma\` com skills \`figma:*\`, pergunte (múltipla escolha, AskUserQuestion quando existir) se quer desativar só as skills/plugin oficiais, mantendo o conector: opções "Desativar as skills oficiais (recomendado)" e "Manter por enquanto".
+3. Mencione em uma linha: ${FULL}
+
+Responda em até 6 linhas, só com o que falta.
+`);
+dwrite('README.md', `# figma-mcp-lite (diretório)
+
+Telas e componentes no Figma com o design system do próprio arquivo, gastando ~10x menos contexto: a tela inteira vai como um spec JSON numa chamada \`use_figma\` só.
+
+Esta é a versão do diretório: só skills (Markdown), usando o **conector Figma** como transporte. Ligue o conector em Configurações → Conectores.
+
+- \`/figma-mcp-lite:ativar\` confere se está tudo pronto.
+- Peça a tela com o link do arquivo figma.com.
+
+${FULL}
+
+Código e documentação: https://github.com/AkiraZ1/figma-mcp-lite
+`);
+
+// Regras do diretório, conferidas aqui pra não descobrir na submissão.
+const BAD = [];
+(function walk(d) {
+  for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    const p = path.join(d, e.name);
+    const rel = path.relative(DIR, p);
+    if (e.isDirectory()) { if (e.name === 'hooks') BAD.push(rel + ': hooks'); walk(p); continue; }
+    if (!/\.(md|txt|json|ya?ml|png|jpe?g|svg|gif|webp)$/i.test(e.name) && e.name !== 'LICENSE') BAD.push(rel + ': extensão');
+    if (e.name === '.mcp.json') BAD.push(rel + ': servidor MCP');
+    const buf = fs.readFileSync(p);
+    if (buf[0] === 0x23 && buf[1] === 0x21) BAD.push(rel + ': começa com #!');
+  }
+})(DIR);
+if (BAD.length) throw new Error('dist-directory fora das regras do diretório:\n' + BAD.join('\n'));
+console.log(`dist-directory/ v${pkg.version}: ${Math.round(size(DIR) / 1024)} KB (só md/json/png)`);
